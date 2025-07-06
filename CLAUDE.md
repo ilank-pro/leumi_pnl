@@ -26,11 +26,14 @@ This is a P&L (Profit & Loss) analysis dashboard project for Bank Leumi financia
 
 ### Interactive P&L Dashboard (`pnl_dashboard.html`)
 - **CSV upload**: Drag-and-drop or file selection functionality
-- **Data processing**: Client-side CSV parsing and validation
+- **Smart classification**: Intelligent transaction classification (Income/Expense/Transfer)
+- **Data processing**: Client-side CSV parsing and validation with P&L vs Transfer separation
 - **Dynamic charts**: Updates based on uploaded data
-- **Monthly P&L analysis**: Automatic calculation of monthly profit/loss
-- **Expense categorization**: Pie chart showing expense distribution
+- **Monthly P&L analysis**: Automatic calculation of monthly profit/loss (excluding transfers)
+- **Expense categorization**: Pie chart showing P&L expenses only
+- **Transfer tracking**: Separate tracking of account transfers and investments
 - **Cumulative tracking**: Line chart showing cumulative profit over time
+- **Monthly detail view**: Drill-down to individual transactions by month
 
 ## File Structure
 
@@ -60,3 +63,18 @@ The dashboard expects CSV files with the following columns:
 - Uses Hebrew text with RTL layout styling
 - Responsive design works on mobile and desktop
 - Error handling for invalid CSV files and data formats
+
+## Smart Classification Logic
+
+The V2 format uses intelligent transaction classification:
+
+### Transaction Types:
+- **Income**: Salary, interest, genuine income sources
+- **Expense**: Living costs, fees, taxes, insurance
+- **Transfer**: Self-transfers, investments, loan activities
+
+### Key Features:
+- **Context-aware**: Considers transaction description and amount direction
+- **P&L Focus**: Separates operational income/expenses from investment activities
+- **Transfer Detection**: Identifies account-to-account movements
+- **Refund Handling**: Properly classifies refunds and corrections
