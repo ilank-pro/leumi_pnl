@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Analysis - Bank CSV</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; }
+        .transaction { border: 1px solid #ccc; margin: 10px 0; padding: 10px; }
+        .income { background-color: #e8f5e8; }
+        .expense { background-color: #ffe8e8; }
+        .debug { font-size: 12px; color: #666; }
+    </style>
+</head>
+<body>
+    <h1>ניתוח קובץ בנק - בדיקת הכנסות והוצאות</h1>
+    <input type="file" id="csvFile" accept=".csv" />
+    <button onclick="analyzeFile()">בדוק קובץ</button>
+    <div id="results"></div>
+
+    <script>
+        function analyzeFile() {
+            const fileInput = document.getElementById('csvFile');
+            if (!fileInput.files[0]) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csv = e.target.result;
+                const lines = csv.trim().split('\n');
+                const transactions = [];
+                
+                // Parse transactions
+                for (let i = 1; i < lines.length && i < 20; i++) { // Only first 20 for testing
+                    const row = lines[i].split(',');
+                    if (row.length >= 4) {
+                        const dateStr = row[0];
+                        const description = row[1];
+                        const amount = parseFloat(row[2]);
+                        const balance = parseFloat(row[3]);
+                        
+                        transactions.push({
+                            date: dateStr,
+                            description: description,
+                            amount: amount,
+                            balance: balance,
+                            index: i
+                        });
+                    }
+                }
+                
+                // Calculate income/expense based on balance changes
+                let html = '<h2>ניתוח תנועות:</h2>';
+                for (let i = 0; i < transactions.length; i++) {
+                    const transaction = transactions[i];
+                    let actualAmount, type, balanceChange = 0;
+                    
+                    if (i < transactions.length - 1) {
+                        const nextTransaction = transactions[i + 1];
+                        balanceChange = transaction.balance - nextTransaction.balance;
+                        
+                        if (balanceChange > 0) {
+                            actualAmount = Math.abs(balanceChange);
+                            type = 'Income';
+                        } else {
+                            actualAmount = -Math.abs(balanceChange);
+                            type = 'Expense';
+                        }
+                    } else {
+                        actualAmount = transaction.amount;
+                        type = 'Unknown';
+                    }
+                    
+                    html += `<div class="transaction ${type.toLowerCase()}">
+                        <strong>${transaction.description}</strong><br>
+                        תאריך: ${transaction.date}<br>
+                        סכום מקורי: ${transaction.amount}<br>
+                        יתרה: ${transaction.balance}<br>
+                        <div class="debug">
+                            שינוי יתרה: ${balanceChange.toFixed(2)}<br>
+                            סכום מחושב: ${actualAmount}<br>
+                            סוג: ${type}
+                        </div>
+                    </div>`;
+                }
+                
+                document.getElementById('results').innerHTML = html;
+            };
+            reader.readAsText(fileInput.files[0]);
+        }
+    </script>
+</body>
+</html>
