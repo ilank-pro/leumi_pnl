@@ -319,7 +319,8 @@
             <p>גרור קובץ CSV לכאן או לחץ לבחירת קובץ</p>
             <div style="margin: 15px 0; font-size: 14px; color: #666;">
                 <strong>פורמטים נתמכים:</strong><br>
-                • פורמט בנק: Date,Description,Amount,Balance<br>
+                • פורמט בנק V1: Date,Description,Amount,Balance (DD/MM/YY)<br>
+                • פורמט בנק V2: Date,Description,Amount,Balance (YYYY-MM-DD)<br>
                 • פורמט סטנדרטי: Date,Description,Amount,Category,Type
             </div>
             <input type="file" id="csvFile" class="upload-input" accept=".csv" />
@@ -494,7 +495,7 @@
             const lines = csv.trim().split('\n');
             const headers = lines[0].split(',');
             
-            // Check if it's the bank format (Date,Description,Amount,Balance) or the standard format
+            // Check format types
             const isBankFormat = headers.length === 4 && headers[0] === 'Date' && headers[3] === 'Balance';
             const isStandardFormat = headers.length >= 5 && headers[4] === 'Type';
             
@@ -506,7 +507,16 @@
             pnlData = [];
             
             if (isBankFormat) {
-                parseBankFormat(lines);
+                // Detect which bank format version based on date format in first data row
+                const firstDataRow = parseCSVLine(lines[1]);
+                const dateStr = firstDataRow[0];
+                
+                // Check if it's DD/MM/YY or YYYY-MM-DD format
+                if (dateStr.includes('/')) {
+                    parseBankFormatV1(lines); // Original format with DD/MM/YY
+                } else {
+                    parseBankFormatV2(lines); // New format with YYYY-MM-DD and signed amounts
+                }
             } else {
                 parseStandardFormat(lines);
             }
@@ -524,7 +534,7 @@
             updateDashboard();
         }
         
-        function parseBankFormat(lines) {
+        function parseBankFormatV1(lines) {
             // Parse all rows first - they come in reverse chronological order
             const transactions = [];
             
@@ -606,6 +616,44 @@
             pnlData.sort((a, b) => a.date - b.date);
         }
         
+        function parseBankFormatV2(lines) {
+            // V2 format has YYYY-MM-DD dates and signed amounts
+            for (let i = 1; i < lines.length; i++) {
+                const row = parseCSVLine(lines[i]);
+                if (row.length >= 4) {
+                    const dateStr = row[0];
+                    const description = row[1];
+                    const amount = parseFloat(row[2]);
+                    const balance = parseFloat(row[3]);
+                    
+                    // Parse YYYY-MM-DD format
+                    const date = new Date(dateStr);
+                    
+                    if (!isNaN(date.getTime()) && !isNaN(amount) && !isNaN(balance)) {
+                        let actualAmount = amount;
+                        let type = amount >= 0 ? 'Income' : 'Expense';
+                        
+                        // For expenses, make amount negative
+                        if (type === 'Expense') {
+                            actualAmount = -Math.abs(amount);
+                        } else {
+                            actualAmount = Math.abs(amount);
+                        }
+                        
+                        const category = extractCategory(description);
+                        
+                        pnlData.push({
+                            date: date,
+                            description: description,
+                            amount: actualAmount,
+                            category: category,
+                            type: type
+                        });
+                    }
+                }
+            }
+        }
+        
         function parseCSVLine(line) {
             // Handle CSV lines with quoted fields
             const result = [];
@@ -652,7 +700,10 @@
         }
         
         function isIncomeTransaction(description) {
-            const incomeKeywords = ['רבית זכות', 'הפקדת מזומן', 'משכורת', 'פרילנס', 'החזר', 'הכנסה', 'זיכוי', 'שכר'];
+            const incomeKeywords = [
+                'רבית זכות', 'הפקדת מזומן', 'משכורת', 'פרילנס', 'החזר', 'הכנסה', 'זיכוי', 'שכר',
+                'העברת משכורת', 'ריבית לפקדון', 'פרעון פקדון', 'זיכוי עמ.הישיר', 'הפקדת שיק'
+            ];
             return incomeKeywords.some(keyword => description.includes(keyword));
         }
         
@@ -676,7 +727,27 @@
                 'גביית עמלה': 'עמלות',
                 'רבית זכות': 'רבית והכנסות',
                 'מס הכנסה': 'מסים',
-                'החזרי מס': 'החזרי מס'
+                'החזרי מס': 'החזרי מס',
+                
+                // New V2 format mappings
+                'כרטיסי אשראי': 'כרטיסי אשראי',
+                'עמל.ערוץ יש': 'עמלות בנק',
+                'הפקדת שיק': 'הפקדות',
+                'מכבי': 'ביטוח בריאות',
+                'לאומי למשכנת': 'משכנתא',
+                'מיטב דש גמל': 'חסכונות וגמל',
+                'מקס איט פיננ': 'הלוואות ואשראי',
+                'בנק אוצר ה': 'העברות בנק',
+                'בנק מזרחי': 'העברות בנק',
+                'עמ.העברת מטח': 'העברות מטח',
+                'העברת משכורת': 'הכנסות עבודה',
+                'עמ.הקצאת אשראי': 'עמלות בנק',
+                'ריבית לפקדון': 'רבית והכנסות',
+                'פרעון פקדון': 'פקדונות',
+                'פיקדון': 'פקדונות',
+                'מסיטיבנק ס': 'העברות בנק',
+                'זיכוי עמ.הישיר': 'החזרים',
+                'תשלום עיקול פ': 'תשלומים משפטיים'
             };
             
             for (const [keyword, category] of Object.entries(categoryMap)) {
