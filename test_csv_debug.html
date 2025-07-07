@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>CSV Debug Test</title>
+</head>
+<body>
+    <h1>CSV Debug Test</h1>
+    <input type="file" id="fileInput" accept=".csv">
+    <div id="output"></div>
+    
+    <script>
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const csv = e.target.result;
+                console.log('=== FileReader Result ===');
+                console.log('CSV type:', typeof csv);
+                console.log('CSV length:', csv.length);
+                console.log('First 100 chars:', csv.substring(0, 100));
+                console.log('Line ending check:', csv.includes('\r\n') ? 'Windows (\\r\\n)' : csv.includes('\n') ? 'Unix (\\n)' : 'Unknown');
+                
+                // Test parsing
+                const lines = csv.trim().replace(/\r\n/g, '\n').split('\n');
+                console.log('Number of lines:', lines.length);
+                console.log('First line (raw):', JSON.stringify(lines[0]));
+                
+                const headers = lines[0].split(',');
+                console.log('Headers array:', headers);
+                console.log('Headers[0]:', JSON.stringify(headers[0]));
+                console.log('Headers[3]:', JSON.stringify(headers[3]));
+                
+                const isBankFormat = headers.length === 4 && headers[0] === 'Date' && headers[3] === 'Balance';
+                console.log('isBankFormat:', isBankFormat);
+                
+                document.getElementById('output').innerHTML = `
+                    <h2>Results:</h2>
+                    <p>File Size: ${csv.length} characters</p>
+                    <p>Lines: ${lines.length}</p>
+                    <p>Headers: ${headers.join(', ')}</p>
+                    <p>Is Bank Format: ${isBankFormat}</p>
+                    <p>First line: ${JSON.stringify(lines[0])}</p>
+                `;
+            };
+            reader.readAsText(file, 'UTF-8');
+        });
+    </script>
+</body>
+</html>

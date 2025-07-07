@@ -101,6 +101,116 @@
             display: none;
         }
         
+        .filter-section {
+            background: #f8f9fa;
+            border: 2px solid #0052cc;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 30px 0;
+            text-align: center;
+        }
+        
+        .filter-section h3 {
+            color: #0052cc;
+            margin-bottom: 20px;
+            font-size: 1.3em;
+        }
+        
+        .filter-controls {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .filter-group label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+        }
+        
+        .filter-select {
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            min-width: 180px;
+            background: white;
+            color: #333;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .filter-select:focus {
+            border-color: #0052cc;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(0, 82, 204, 0.2);
+        }
+        
+        .filter-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+        
+        .filter-button {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+        
+        .apply-filter {
+            background: #28a745;
+            color: white;
+        }
+        
+        .apply-filter:hover {
+            background: #218838;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(40, 167, 69, 0.3);
+        }
+        
+        .reset-filter {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .reset-filter:hover {
+            background: #5a6268;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(108, 117, 125, 0.3);
+        }
+        
+        .filter-status {
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            margin-top: 10px;
+            display: none;
+        }
+        
+        .filter-status.active {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
         .summary-stats {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -318,6 +428,29 @@
                 width: 100%;
                 margin-top: 10px;
             }
+            
+            .filter-controls {
+                flex-direction: column;
+                gap: 15px;
+            }
+            
+            .filter-group {
+                width: 100%;
+            }
+            
+            .filter-select {
+                width: 100%;
+                min-width: unset;
+            }
+            
+            .filter-buttons {
+                flex-direction: column;
+                width: 100%;
+            }
+            
+            .filter-button {
+                width: 100%;
+            }
         }
     </style>
 </head>
@@ -325,21 +458,21 @@
     <div class="container">
         <div class="header">
             <h1>📊 דוח רווח והפסד</h1>
-            <div class="subtitle">ניתוח P&L מקובץ CSV</div>
+            <div class="subtitle">ניתוח P&L מקובץ PDF או CSV</div>
         </div>
         
         <div class="upload-section" id="uploadSection">
-            <h3>העלאת קובץ CSV</h3>
-            <p>גרור קובץ CSV לכאן או לחץ לבחירת קובץ</p>
+            <h3>העלאת קובץ נתונים</h3>
+            <p>גרור קובץ PDF או CSV לכאן או לחץ לבחירת קובץ</p>
             <div style="margin: 15px 0; font-size: 14px; color: #666;">
                 <strong>פורמטים נתמכים:</strong><br>
-                • פורמט בנק V1: Date,Description,Amount,Balance (DD/MM/YY)<br>
-                • פורמט בנק V2: Date,Description,Amount,Balance (YYYY-MM-DD)<br>
-                • פורמט סטנדרטי: Date,Description,Amount,Category,Type
+                • <strong>PDF:</strong> דוחות בנק לאומי (עיבוד אוטומטי)<br>
+                • <strong>CSV:</strong> פורמט בנק V1/V2 או פורמט סטנדרטי<br>
+                • עיבוד מתוח באמצעות שרת Python מקומי
             </div>
-            <input type="file" id="csvFile" class="upload-input" accept=".csv" />
-            <button class="upload-button" onclick="document.getElementById('csvFile').click()">
-                בחר קובץ CSV
+            <input type="file" id="dataFile" class="upload-input" accept=".csv,.pdf" />
+            <button class="upload-button" onclick="document.getElementById('dataFile').click()">
+                בחר קובץ PDF או CSV
             </button>
             <div class="file-info" id="fileInfo"></div>
             <div class="error-message" id="errorMessage"></div>
@@ -348,6 +481,33 @@
         <div class="loading" id="loading">
             <div class="loading-spinner"></div>
             <p>מעבד נתונים...</p>
+        </div>
+        
+        <div class="filter-section" id="filterSection" style="display: none;">
+            <h3>🗓️ בחירת טווח תאריכים לניתוח</h3>
+            <div class="filter-controls">
+                <div class="filter-group">
+                    <label for="startMonthFilter">מחודש:</label>
+                    <select id="startMonthFilter" class="filter-select">
+                        <option value="">בחר חודש התחלה</option>
+                    </select>
+                </div>
+                <div class="filter-group">
+                    <label for="endMonthFilter">עד חודש:</label>
+                    <select id="endMonthFilter" class="filter-select">
+                        <option value="">בחר חודש סיום</option>
+                    </select>
+                </div>
+                <div class="filter-buttons">
+                    <button class="filter-button apply-filter" onclick="applyDateFilter()">
+                        החל מסנן
+                    </button>
+                    <button class="filter-button reset-filter" onclick="resetDateFilter()">
+                        איפוס מסנן
+                    </button>
+                </div>
+            </div>
+            <div class="filter-status" id="filterStatus"></div>
         </div>
         
         <div id="dashboardContent" style="display: none;">
@@ -457,7 +617,7 @@
         // Initialize upload functionality
         document.addEventListener('DOMContentLoaded', function() {
             const uploadSection = document.getElementById('uploadSection');
-            const csvFile = document.getElementById('csvFile');
+            const dataFile = document.getElementById('dataFile');
             const fileInfo = document.getElementById('fileInfo');
             const errorMessage = document.getElementById('errorMessage');
             
@@ -483,14 +643,14 @@
             });
             
             // File input change
-            csvFile.addEventListener('change', function(e) {
+            dataFile.addEventListener('change', function(e) {
                 if (e.target.files.length > 0) {
                     handleFileUpload(e.target.files[0]);
                 }
             });
         });
         
-        function handleFileUpload(file) {
+        async function handleFileUpload(file) {
             const fileInfo = document.getElementById('fileInfo');
             const errorMessage = document.getElementById('errorMessage');
             const loading = document.getElementById('loading');
@@ -499,42 +659,149 @@
             fileInfo.style.display = 'none';
             errorMessage.style.display = 'none';
             
-            if (!file.name.toLowerCase().endsWith('.csv')) {
-                showError('אנא בחר קובץ CSV בלבד');
+            // Check file type
+            const fileName = file.name.toLowerCase();
+            const isPDF = fileName.endsWith('.pdf');
+            const isCSV = fileName.endsWith('.csv');
+            
+            if (!isPDF && !isCSV) {
+                showError('אנא בחר קובץ PDF או CSV בלבד');
                 return;
             }
             
             // Show file info
-            fileInfo.innerHTML = `קובץ נבחר: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
+            const fileType = isPDF ? 'PDF' : 'CSV';
+            fileInfo.innerHTML = `קובץ ${fileType} נבחר: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
             fileInfo.style.display = 'block';
             
             // Show loading
             loading.style.display = 'block';
+            
+            if (isPDF) {
+                // Handle PDF upload via server
+                await handlePDFUpload(file);
+            } else {
+                // Handle CSV upload (client-side processing)
+                handleCSVUpload(file);
+            }
+        }
+        
+        async function handlePDFUpload(file) {
+            const loading = document.getElementById('loading');
+            
+            try {
+                // Create FormData for file upload
+                const formData = new FormData();
+                formData.append('file', file);
+                
+                // Update loading message
+                loading.querySelector('p').textContent = 'מעבד קובץ PDF...';
+                
+                // Send to server
+                const response = await fetch('http://localhost:5001/upload-pdf', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(result.error || 'שגיאה בעיבוד הקובץ');
+                }
+                
+                if (result.success) {
+                    // Show success message
+                    const fileInfo = document.getElementById('fileInfo');
+                    fileInfo.innerHTML = `✅ PDF עובד בהצלחה: ${result.transaction_count} תנועות נמצאו`;
+                    fileInfo.style.background = '#e8f5e8';
+                    fileInfo.style.color = '#2e7d32';
+                    
+                    // Process the returned CSV data
+                    parseCSV(result.csv_data);
+                    loading.style.display = 'none';
+                } else {
+                    throw new Error(result.error || 'שגיאה לא ידועה');
+                }
+                
+            } catch (error) {
+                loading.style.display = 'none';
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    showError('שגיאה בחיבור לשרת. אנא וודא שהשרת פועל על localhost:5001');
+                } else {
+                    showError('שגיאה בעיבוד קובץ PDF: ' + error.message);
+                }
+            }
+        }
+        
+        function handleCSVUpload(file) {
+            const loading = document.getElementById('loading');
+            
+            // Update loading message
+            loading.querySelector('p').textContent = 'מעבד קובץ CSV...';
             
             // Read and parse CSV
             const reader = new FileReader();
             reader.onload = function(e) {
                 try {
                     const csv = e.target.result;
+                    console.log('=== FileReader Result ===');
+                    console.log('CSV type:', typeof csv);
+                    console.log('CSV length:', csv.length);
+                    console.log('First 100 chars:', csv.substring(0, 100));
+                    console.log('Line ending check:', csv.includes('\r\n') ? 'Windows (\\r\\n)' : csv.includes('\n') ? 'Unix (\\n)' : 'Unknown');
+                    
                     parseCSV(csv);
                     loading.style.display = 'none';
                 } catch (error) {
                     loading.style.display = 'none';
-                    showError('שגיאה בקריאת הקובץ: ' + error.message);
+                    showError('שגיאה בקריאת קובץ CSV: ' + error.message);
                 }
             };
-            reader.readAsText(file);
+            reader.readAsText(file, 'UTF-8');
         }
         
         function parseCSV(csv) {
-            const lines = csv.trim().split('\n');
-            const headers = lines[0].split(',');
+            console.log('=== DEBUG: parseCSV called ===');
+            console.log('CSV length:', csv.length);
+            console.log('First 200 chars:', csv.substring(0, 200));
+            console.log('CSV type:', typeof csv);
             
-            // Check format types
-            const isBankFormat = headers.length === 4 && headers[0] === 'Date' && headers[3] === 'Balance';
+            // Handle both Unix (\n) and Windows (\r\n) line endings
+            const lines = csv.trim().replace(/\r\n/g, '\n').split('\n');
+            console.log('Number of lines:', lines.length);
+            console.log('First line (raw):', JSON.stringify(lines[0]));
+            console.log('First line length:', lines[0].length);
+            
+            const headers = lines[0].split(',');
+            console.log('Headers array:', headers);
+            console.log('Header count:', headers.length);
+            console.log('Headers[0]:', JSON.stringify(headers[0]));
+            console.log('Headers[0] length:', headers[0].length);
+            console.log('Headers[0] charCodes:', Array.from(headers[0]).map(c => c.charCodeAt(0)));
+            console.log('Headers[3]:', JSON.stringify(headers[3]));
+            console.log('Headers[3] length:', headers[3].length);
+            console.log('Headers[3] charCodes:', Array.from(headers[3]).map(c => c.charCodeAt(0)));
+            
+            // Check format types with detailed debugging
+            const header0IsDate = headers[0] === 'Date';
+            const header3IsBalance = headers[3] === 'Balance';
+            const lengthIs4 = headers.length === 4;
+            
+            console.log('header0IsDate:', header0IsDate);
+            console.log('header3IsBalance:', header3IsBalance);
+            console.log('lengthIs4:', lengthIs4);
+            
+            const isBankFormat = lengthIs4 && header0IsDate && header3IsBalance;
             const isStandardFormat = headers.length >= 5 && headers[4] === 'Type';
             
+            console.log('isBankFormat:', isBankFormat);
+            console.log('isStandardFormat:', isStandardFormat);
+            
             if (!isBankFormat && !isStandardFormat) {
+                console.error('Format validation failed!');
+                console.error('Expected headers[0] to be "Date", got:', JSON.stringify(headers[0]));
+                console.error('Expected headers[3] to be "Balance", got:', JSON.stringify(headers[3]));
+                console.error('Expected header count to be 4, got:', headers.length);
                 showError('הקובץ חייב להיות בפורמט הבנק (Date,Description,Amount,Balance) או הפורמט הסטנדרטי (Date,Description,Amount,Category,Type)');
                 return;
             }
@@ -575,6 +842,9 @@
             // Process data and update dashboard
             processData();
             updateDashboard();
+            
+            // Populate date filters after data is loaded
+            populateDateFilters();
         }
         
         function parseBankFormatV1(lines) {
@@ -803,11 +1073,14 @@
         }
         
         function processData() {
+            // Use filtered data if filter is active, otherwise use all data
+            const dataToProcess = dateFilterActive ? filteredData : pnlData;
+            
             monthlyData = {};
             expensesByCategory = {};
             const categorySet = new Set();
             
-            pnlData.forEach(item => {
+            dataToProcess.forEach(item => {
                 const monthKey = item.date.getFullYear() + '-' + String(item.date.getMonth() + 1).padStart(2, '0');
                 
                 // Initialize monthly data
@@ -1350,6 +1623,139 @@
                 }
             });
         }
+        
+        // Date Filtering Functions
+        let filteredData = null;
+        let dateFilterActive = false;
+        
+        function populateDateFilters() {
+            const startSelect = document.getElementById('startMonthFilter');
+            const endSelect = document.getElementById('endMonthFilter');
+            
+            // Clear existing options except first one
+            startSelect.innerHTML = '<option value="">בחר חודש התחלה</option>';
+            endSelect.innerHTML = '<option value="">בחר חודש סיום</option>';
+            
+            if (!pnlData || pnlData.length === 0) return;
+            
+            // Get unique months from data and sort them
+            const monthsSet = new Set();
+            pnlData.forEach(item => {
+                const monthKey = item.date.getFullYear() + '-' + String(item.date.getMonth() + 1).padStart(2, '0');
+                monthsSet.add(monthKey);
+            });
+            
+            const months = Array.from(monthsSet).sort();
+            
+            // Populate both dropdowns
+            months.forEach(monthKey => {
+                const [year, month] = monthKey.split('-');
+                const monthName = new Date(year, month - 1).toLocaleString('he-IL', { 
+                    month: 'long', 
+                    year: 'numeric' 
+                });
+                
+                // Add to start month dropdown
+                const startOption = document.createElement('option');
+                startOption.value = monthKey;
+                startOption.textContent = monthName;
+                startSelect.appendChild(startOption);
+                
+                // Add to end month dropdown
+                const endOption = document.createElement('option');
+                endOption.value = monthKey;
+                endOption.textContent = monthName;
+                endSelect.appendChild(endOption);
+            });
+            
+            // Set default values (first and last months)
+            if (months.length > 0) {
+                startSelect.value = months[0];
+                endSelect.value = months[months.length - 1];
+            }
+            
+            // Show filter section
+            document.getElementById('filterSection').style.display = 'block';
+        }
+        
+        function applyDateFilter() {
+            const startMonth = document.getElementById('startMonthFilter').value;
+            const endMonth = document.getElementById('endMonthFilter').value;
+            
+            if (!startMonth || !endMonth) {
+                showError('אנא בחר חודש התחלה וחודש סיום');
+                return;
+            }
+            
+            if (startMonth > endMonth) {
+                showError('חודש התחלה חייב להיות לפני או שווה לחודש הסיום');
+                return;
+            }
+            
+            // Filter the data based on selected date range
+            filteredData = pnlData.filter(item => {
+                const itemMonth = item.date.getFullYear() + '-' + String(item.date.getMonth() + 1).padStart(2, '0');
+                return itemMonth >= startMonth && itemMonth <= endMonth;
+            });
+            
+            if (filteredData.length === 0) {
+                showError('לא נמצאו נתונים בטווח התאריכים שנבחר');
+                return;
+            }
+            
+            // Set filter as active
+            dateFilterActive = true;
+            
+            // Update filter status
+            updateFilterStatus(startMonth, endMonth);
+            
+            // Process and update dashboard with filtered data
+            processData();
+            updateDashboard();
+            
+            // Hide error messages
+            document.getElementById('errorMessage').style.display = 'none';
+        }
+        
+        function resetDateFilter() {
+            // Reset filter state
+            dateFilterActive = false;
+            filteredData = null;
+            
+            // Reset dropdown selections
+            document.getElementById('startMonthFilter').selectedIndex = 0;
+            document.getElementById('endMonthFilter').selectedIndex = 0;
+            
+            // Hide filter status
+            document.getElementById('filterStatus').classList.remove('active');
+            
+            // Process and update dashboard with all data
+            processData();
+            updateDashboard();
+            
+            // Repopulate month selectors with full data
+            populateMonthSelector();
+            populateCategorySelector();
+        }
+        
+        function updateFilterStatus(startMonth, endMonth) {
+            const statusDiv = document.getElementById('filterStatus');
+            const [startYear, startMonthNum] = startMonth.split('-');
+            const [endYear, endMonthNum] = endMonth.split('-');
+            
+            const startMonthName = new Date(startYear, startMonthNum - 1).toLocaleString('he-IL', { 
+                month: 'long', 
+                year: 'numeric' 
+            });
+            const endMonthName = new Date(endYear, endMonthNum - 1).toLocaleString('he-IL', { 
+                month: 'long', 
+                year: 'numeric' 
+            });
+            
+            statusDiv.textContent = `מסנן פעיל: ${startMonthName} עד ${endMonthName} (${filteredData.length} תנועות)`;
+            statusDiv.classList.add('active');
+        }
+        
     </script>
 </body>
 </html>

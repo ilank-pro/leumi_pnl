@@ -9,12 +9,37 @@
 - `pnl_dashboard.html` - הדשבורד הראשי עם פונקציונליות העלאת קבצים
 - `bank_leumi_analysis.html` - הדשבורד המקורי עם נתונים קבועים
 - `data/sample_pnl.csv` - קובץ דוגמה לפורמט הנתונים הנדרש
+- `server.py` - שרת Flask להפעלת הדשבורד
+- `start_server.sh` - סקריפט להפעלת השרת עם סביבה וירטואלית
+- `setup_dev.sh` - סקריפט להגדרת סביבת הפיתוח
+- `requirements.txt` - תלויות Python
 - `CLAUDE.md` - מידע למפתחים על המבנה והארכיטקטורה
 
 ## איך להשתמש
 
-### 1. פתיחת הדשבורד
-פתח את הקובץ `pnl_dashboard.html` בדפדפן
+### 1. הגדרת סביבת הפיתוח
+```bash
+# הרצת סקריפט ההגדרה הראשונית
+./setup_dev.sh
+
+# או הגדרה ידנית:
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. הפעלת השרת
+```bash
+# הפעלת השרת עם סביבה וירטואלית
+./start_server.sh
+
+# או הפעלה ידנית:
+source venv/bin/activate
+python server.py
+```
+
+### 3. פתיחת הדשבורד
+פתח את הקובץ `pnl_dashboard.html` בדפדפן או גש ל-http://localhost:5000
 
 ### 2. העלאת קובץ CSV
 - לחץ על "בחר קובץ CSV" או גרור קובץ לאזור ההעלאה
