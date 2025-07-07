@@ -452,6 +452,7 @@
         let expensesByCategory = {}; // New: track expenses by category per month
         let availableCategories = []; // New: list of expense categories
         let charts = {};
+        let categorySelectHandler = null;
         
         // Initialize upload functionality
         document.addEventListener('DOMContentLoaded', function() {
@@ -538,7 +539,15 @@
                 return;
             }
             
+            // Clear all data from previous CSV
             pnlData = [];
+            availableCategories = [];
+            monthlyData = {};
+            expensesByCategory = {};
+            
+            // Reset UI state
+            document.getElementById('categoryTrendContainer').style.display = 'none';
+            document.getElementById('monthlyDetailsContainer').style.display = 'none';
             
             if (isBankFormat) {
                 // Detect which bank format version based on date format in first data row
@@ -1081,8 +1090,14 @@
         function populateCategorySelector() {
             const categorySelector = document.getElementById('categorySelector');
             
+            // Remove existing event listener if it exists
+            if (categorySelectHandler) {
+                categorySelector.removeEventListener('change', categorySelectHandler);
+            }
+            
             // Clear existing options except the first one
             categorySelector.innerHTML = '<option value="">בחר קטגוריה למעקב</option>';
+            categorySelector.value = ''; // Reset selected value
             
             // Populate with available expense categories
             availableCategories.forEach(category => {
@@ -1092,8 +1107,8 @@
                 categorySelector.appendChild(option);
             });
             
-            // Add event listener for category selection
-            categorySelector.addEventListener('change', function() {
+            // Create and store the event handler
+            categorySelectHandler = function() {
                 if (this.value) {
                     // Show loading state
                     const container = document.getElementById('categoryTrendContainer');
@@ -1108,7 +1123,10 @@
                 } else {
                     document.getElementById('categoryTrendContainer').style.display = 'none';
                 }
-            });
+            };
+            
+            // Add the new event listener
+            categorySelector.addEventListener('change', categorySelectHandler);
         }
         
         function showMonthDetails(selectedMonth) {
