@@ -396,6 +396,24 @@
                 </div>
                 
                 <div class="card full-width">
+                    <h3>📈 מעקב הוצאות לפי קטגוריה</h3>
+                    <div style="margin-bottom: 20px;">
+                        <label for="categorySelector" style="font-weight: 600; margin-left: 10px;">בחר קטגוריית הוצאה:</label>
+                        <select id="categorySelector" style="padding: 8px 15px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px;">
+                            <option value="">בחר קטגוריה למעקב</option>
+                        </select>
+                    </div>
+                    <div id="categoryTrendContainer" style="display: none;">
+                        <div class="summary-stats" id="categoryTrendStats" style="margin-bottom: 20px;">
+                            <!-- Category trend stats will be populated here -->
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="categoryTrendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card full-width">
                     <h3>🔍 פירוט תנועות חודשי</h3>
                     <div style="margin-bottom: 20px;">
                         <label for="monthSelector" style="font-weight: 600; margin-left: 10px;">בחר חודש:</label>
@@ -431,6 +449,8 @@
     <script>
         let pnlData = [];
         let monthlyData = {};
+        let expensesByCategory = {}; // New: track expenses by category per month
+        let availableCategories = []; // New: list of expense categories
         let charts = {};
         
         // Initialize upload functionality
@@ -775,10 +795,13 @@
         
         function processData() {
             monthlyData = {};
+            expensesByCategory = {};
+            const categorySet = new Set();
             
             pnlData.forEach(item => {
                 const monthKey = item.date.getFullYear() + '-' + String(item.date.getMonth() + 1).padStart(2, '0');
                 
+                // Initialize monthly data
                 if (!monthlyData[monthKey]) {
                     monthlyData[monthKey] = {
                         income: 0,
@@ -787,14 +810,32 @@
                     };
                 }
                 
+                // Initialize expense category tracking for this month
+                if (!expensesByCategory[monthKey]) {
+                    expensesByCategory[monthKey] = {};
+                }
+                
                 if (item.amount > 0) {
                     monthlyData[monthKey].income += item.amount;
                 } else {
-                    monthlyData[monthKey].expenses += Math.abs(item.amount);
+                    const expenseAmount = Math.abs(item.amount);
+                    monthlyData[monthKey].expenses += expenseAmount;
+                    
+                    // Track expense by category
+                    const category = item.category;
+                    categorySet.add(category);
+                    
+                    if (!expensesByCategory[monthKey][category]) {
+                        expensesByCategory[monthKey][category] = 0;
+                    }
+                    expensesByCategory[monthKey][category] += expenseAmount;
                 }
                 
                 monthlyData[monthKey].netProfit = monthlyData[monthKey].income - monthlyData[monthKey].expenses;
             });
+            
+            // Convert category set to sorted array
+            availableCategories = Array.from(categorySet).sort();
         }
         
         function updateDashboard() {
@@ -802,6 +843,7 @@
             updateMonthlyTable();
             updateCharts();
             populateMonthSelector();
+            populateCategorySelector();
             
             document.getElementById('dashboardContent').style.display = 'block';
         }
@@ -1036,6 +1078,39 @@
             });
         }
         
+        function populateCategorySelector() {
+            const categorySelector = document.getElementById('categorySelector');
+            
+            // Clear existing options except the first one
+            categorySelector.innerHTML = '<option value="">בחר קטגוריה למעקב</option>';
+            
+            // Populate with available expense categories
+            availableCategories.forEach(category => {
+                const option = document.createElement('option');
+                option.value = category;
+                option.textContent = category;
+                categorySelector.appendChild(option);
+            });
+            
+            // Add event listener for category selection
+            categorySelector.addEventListener('change', function() {
+                if (this.value) {
+                    // Show loading state
+                    const container = document.getElementById('categoryTrendContainer');
+                    const statsContainer = document.getElementById('categoryTrendStats');
+                    statsContainer.innerHTML = '<div class="stat-card"><div class="stat-value neutral">טוען...</div></div>';
+                    container.style.display = 'block';
+                    
+                    // Small delay to show loading state
+                    setTimeout(() => {
+                        showCategoryTrend(this.value);
+                    }, 100);
+                } else {
+                    document.getElementById('categoryTrendContainer').style.display = 'none';
+                }
+            });
+        }
+        
         function showMonthDetails(selectedMonth) {
             const container = document.getElementById('monthlyDetailsContainer');
             const statsContainer = document.getElementById('monthlyDetailStats');
@@ -1106,6 +1181,156 @@
             
             // Show the container
             container.style.display = 'block';
+        }
+        
+        function showCategoryTrend(selectedCategory) {
+            const container = document.getElementById('categoryTrendContainer');
+            const statsContainer = document.getElementById('categoryTrendStats');
+            const chartCanvas = document.getElementById('categoryTrendChart');
+            
+            // Validate inputs
+            if (!selectedCategory || !monthlyData || Object.keys(monthlyData).length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+            
+            // Get all months sorted
+            const allMonths = Object.keys(monthlyData).sort();
+            
+            // Extract category data for each month
+            const categoryData = allMonths.map(monthKey => {
+                return expensesByCategory[monthKey] && expensesByCategory[monthKey][selectedCategory] 
+                    ? expensesByCategory[monthKey][selectedCategory] 
+                    : 0;
+            });
+            
+            // Calculate statistics with error handling
+            const totalSpent = categoryData.reduce((sum, amount) => sum + (isNaN(amount) ? 0 : amount), 0);
+            const monthsWithData = categoryData.filter(amount => amount > 0).length;
+            const avgMonthly = monthsWithData > 0 ? totalSpent / monthsWithData : 0;
+            const maxMonth = categoryData.length > 0 ? Math.max(...categoryData) : 0;
+            const minMonth = categoryData.filter(amount => amount > 0).length > 0 ? Math.min(...categoryData.filter(amount => amount > 0)) : 0;
+            
+            // Handle case where category has no data
+            if (totalSpent === 0) {
+                statsContainer.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-value neutral">אין נתונים</div>
+                        <div class="stat-label">עבור ${selectedCategory}</div>
+                    </div>
+                `;
+                container.style.display = 'block';
+                return;
+            }
+            
+            // Format month labels
+            const monthLabels = allMonths.map(monthKey => {
+                const [year, month] = monthKey.split('-');
+                return new Date(year, month - 1).toLocaleString('he-IL', { 
+                    month: 'short', 
+                    year: 'numeric' 
+                });
+            });
+            
+            // Update category statistics
+            statsContainer.innerHTML = `
+                <div class="stat-card">
+                    <div class="stat-value negative currency">₪${totalSpent.toLocaleString('he-IL')}</div>
+                    <div class="stat-label">סה"כ ${selectedCategory}</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value neutral currency">₪${avgMonthly.toLocaleString('he-IL')}</div>
+                    <div class="stat-label">ממוצע חודשי</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value negative currency">₪${maxMonth.toLocaleString('he-IL')}</div>
+                    <div class="stat-label">חודש מקסימלי</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value neutral">${monthsWithData}</div>
+                    <div class="stat-label">חודשים פעילים</div>
+                </div>
+            `;
+            
+            // Create or update the trend chart
+            updateCategoryTrendChart(chartCanvas, monthLabels, categoryData, selectedCategory);
+            
+            // Show the container
+            container.style.display = 'block';
+        }
+        
+        function updateCategoryTrendChart(canvas, labels, data, categoryName) {
+            const ctx = canvas.getContext('2d');
+            
+            // Destroy existing chart if it exists
+            if (charts.categoryTrend) {
+                charts.categoryTrend.destroy();
+            }
+            
+            charts.categoryTrend = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `${categoryName} (₪)`,
+                        data: data,
+                        borderColor: '#dc3545',
+                        backgroundColor: 'rgba(220, 53, 69, 0.1)',
+                        borderWidth: 3,
+                        fill: true,
+                        tension: 0.1,
+                        pointBackgroundColor: '#dc3545',
+                        pointBorderColor: '#ffffff',
+                        pointBorderWidth: 2,
+                        pointRadius: 5,
+                        pointHoverRadius: 7
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `מגמת הוצאות: ${categoryName}`,
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `₪${context.parsed.y.toLocaleString('he-IL')}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₪' + value.toLocaleString('he-IL');
+                                }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: true,
+                                color: 'rgba(0,0,0,0.1)'
+                            }
+                        }
+                    },
+                    elements: {
+                        point: {
+                            hoverRadius: 8
+                        }
+                    }
+                }
+            });
         }
     </script>
 </body>
