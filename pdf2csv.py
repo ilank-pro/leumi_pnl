@@ -41,16 +41,16 @@ class BankLeumiPDFParser:
         }
         
         # Transaction patterns for Bank Leumi statements
-        # Based on actual format: balance amount reference description date date
+        # Based on actual format: balance amount description date
         self.transaction_patterns = [
-            # Main Bank Leumi pattern: balance amount reference description date date
-            r'([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+(\d+)\s*([א-ת\-\*\s]+?)\s+(\d{2}/\d{2}/\d{2})\s+(\d{2}/\d{2}/\d{2})',
+            # Main Bank Leumi pattern: balance amount description date (4 fields)
+            r'([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([א-ת\-\*\s\w]+?)\s+(\d{2}/\d{2}/\d{2})',
             
-            # Alternative pattern with more flexible spacing
-            r'([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+(\d+)\s+([א-ת\-\*\s]+?)\s+(\d{2}/\d{2}/\d{2})\s+(\d{2}/\d{2}/\d{2})',
+            # Alternative pattern with more flexible spacing and Hebrew characters
+            r'([\d,]+\.?\d*)\s+([\d,]+\.?\d*)\s+([א-ת\-\*\s\w\.\'\u0590-\u05FF]+?)\s+(\d{2}/\d{2}/\d{2})',
             
             # Pattern for lines with currency symbols
-            r'([\d,]+\.?\d*)\s*₪?\s+([\d,]+\.?\d*)\s*₪?\s+(\d+)\s+([א-ת\-\*\s]+?)\s+(\d{2}/\d{2}/\d{2})\s+(\d{2}/\d{2}/\d{2})',
+            r'([\d,]+\.?\d*)\s*₪?\s+([\d,]+\.?\d*)\s*₪?\s+([א-ת\-\*\s\w\.\'\u0590-\u05FF]+?)\s+(\d{2}/\d{2}/\d{2})',
             
             # Fallback: Original patterns for other formats (keeping for compatibility)
             r'(\d{1,2}[\/\-\.]\d{1,2}[\/\-\.]\d{2,4})\s+(.+?)\s+([\-\+\(]?\d{1,3}(?:,\d{3})*\.?\d{0,2}[\)\-]?)\s+([\-\+\(]?\d{1,3}(?:,\d{3})*\.?\d{0,2}[\)\-]?)',
@@ -349,15 +349,20 @@ class BankLeumiPDFParser:
                     groups = match.groups()
                     
                     # Handle different patterns based on number of groups
-                    if len(groups) == 6:  # New Bank Leumi format: balance amount ref description date date
+                    if len(groups) == 4:  # New Bank Leumi format: balance amount description date
+                        balance_str, amount_str, description, date_str = groups
+                        
+                        # Check if this is the new format (balance amount description date)
+                        if pattern_idx < 3:  # First 3 patterns are the new format
+                            # This is the new format
+                            pass
+                        else:
+                            # This is the old format: date description amount balance
+                            date_str, description, amount_str, balance_str = groups
+                        
+                    elif len(groups) == 6:  # Old Bank Leumi format: balance amount ref description date date
                         balance_str, amount_str, reference, description, date_str1, date_str2 = groups
                         date_str = date_str1  # Use first date
-                        
-                        # Calculate transaction amount from balance change if needed
-                        # For now, use the amount directly but we might need to adjust the sign
-                        
-                    elif len(groups) == 4:  # Original format: date description amount balance
-                        date_str, description, amount_str, balance_str = groups
                         
                     else:
                         continue  # Skip if unexpected number of groups
@@ -381,7 +386,7 @@ class BankLeumiPDFParser:
                     description = description.strip()
                     
                     # For new format, reverse Hebrew text if needed
-                    if len(groups) == 6:
+                    if pattern_idx < 3:  # New format patterns
                         # The Hebrew text might be reversed, try to detect and fix
                         description = self._fix_hebrew_text(description)
                     
@@ -410,11 +415,42 @@ class BankLeumiPDFParser:
     
     def _fix_hebrew_text(self, text: str) -> str:
         """Attempt to fix reversed Hebrew text"""
-        # Simple heuristic: if text contains Hebrew and looks reversed, reverse it
-        if text and any('\u0590' <= char <= '\u05FF' for char in text):
-            # This is a simple approach - reverse the string
-            # In a real implementation, you might want more sophisticated logic
-            return text[::-1] if text.endswith('י-') or text.startswith('-') else text
+        if not text:
+            return text
+            
+        # Check if text contains Hebrew characters
+        has_hebrew = any('\u0590' <= char <= '\u05FF' for char in text)
+        if not has_hebrew:
+            return text
+        
+        # More sophisticated heuristics for detecting reversed text
+        # Common patterns that indicate reversed text:
+        # 1. Ends with 'י-' (reversed '-י')
+        # 2. Contains common reversed patterns
+        # 3. Hebrew letters followed by Latin letters (like 'י-יארשא')
+        
+        reversed_indicators = [
+            'י-',  # Common ending for reversed text
+            'ת-',  # Another common ending
+            'ן-',  # Another common ending
+            'ם-',  # Another common ending
+        ]
+        
+        # Check for reversed indicators
+        should_reverse = False
+        for indicator in reversed_indicators:
+            if indicator in text:
+                should_reverse = True
+                break
+        
+        # Additional heuristic: if text has Hebrew followed by Latin
+        if re.search(r'[א-ת][a-zA-Z]', text):
+            should_reverse = True
+        
+        if should_reverse:
+            # Reverse the entire string
+            return text[::-1]
+        
         return text
     
     def save_to_csv(self, transactions: List[Dict], output_path: str) -> None:
@@ -422,8 +458,7 @@ class BankLeumiPDFParser:
         if not transactions:
             raise ValueError("No transactions to save")
         
-        # Sort transactions by date
-        transactions.sort(key=lambda x: x['date'])
+        # DO NOT sort - keep original PDF order
         
         # Create CSV data with proper rounding
         csv_data = []
@@ -556,36 +591,61 @@ class BankLeumiPDFParser:
         return is_valid
     
     def _post_process_transactions(self, transactions: List[Dict]) -> List[Dict]:
-        """Post-process transactions to calculate actual amounts and set types"""
+        """Post-process transactions to determine income/expense classification"""
         if not transactions:
             return transactions
         
-        # Sort by date first
-        transactions.sort(key=lambda x: x['date'])
+        # DO NOT sort - keep original PDF order to maintain balance flow
         
-        # Calculate actual transaction amounts based on balance changes
+        # Determine income/expense classification based on balance changes
+        # The PDF shows transactions in actual processing order, so we can use the sequence
         for i, transaction in enumerate(transactions):
-            if i == 0:
-                # First transaction: assume the amount is correct as-is
-                # But we need to determine the sign based on common patterns
-                actual_amount = transaction['raw_amount']
-                
-                # Apply sign logic based on description patterns
-                if self._is_expense_transaction(transaction['description']):
-                    actual_amount = -abs(actual_amount)
-                else:
-                    actual_amount = abs(actual_amount)
-            else:
-                # Calculate amount from balance difference
-                prev_balance = transactions[i-1]['balance']
+            # Use the raw amount directly from the transaction line
+            actual_amount = transaction['raw_amount']
+            
+            # Find the chronologically previous transaction
+            # PDF order is reverse chronological (newest first), so we need to find
+            # the transaction that happened just before this one chronologically
+            prev_transaction = None
+            
+            if i < len(transactions) - 1:
+                # Look for the immediate next transaction in the PDF (which is chronologically previous)
+                for j in range(i+1, len(transactions)):
+                    if transactions[j]['balance'] != transaction['balance']:
+                        prev_transaction = transactions[j]
+                        break
+            
+            # If no previous transaction with different balance found, look for previous date
+            if prev_transaction is None:
+                current_date = transaction['date']
+                for j in range(i+1, len(transactions)):
+                    if transactions[j]['date'] < current_date:
+                        prev_transaction = transactions[j]
+                        break
+            
+            # Determine if this is income or expense based on balance change
+            if prev_transaction is not None:
+                # Compare with previous transaction
+                prev_balance = prev_transaction['balance']
                 current_balance = transaction['balance']
-                actual_amount = current_balance - prev_balance
+                balance_change = current_balance - prev_balance
+                
+                # If balance went down, it's an expense; if balance went up, it's income
+                is_expense = balance_change < 0
+            else:
+                # No previous transaction found, use raw amount sign as hint
+                # For Bank Leumi, most transactions are expenses, so default to expense
+                is_expense = True
             
-            # Set the calculated amount with proper rounding
-            transaction['amount'] = round(actual_amount, 2)
+            # Set the amount with proper sign based on income/expense classification
+            if is_expense:
+                transaction['amount'] = -abs(actual_amount)  # Negative for expenses
+                transaction['type'] = "Expense"
+            else:
+                transaction['amount'] = abs(actual_amount)   # Positive for income
+                transaction['type'] = "Income"
             
-            # Classify transaction and extract category
-            transaction['type'] = self.classify_transaction(transaction['description'], actual_amount)
+            # Set category
             transaction['category'] = self.extract_category(transaction['description'])
             
             # Remove the raw_amount field as it's no longer needed
@@ -595,26 +655,42 @@ class BankLeumiPDFParser:
     
     def _is_expense_transaction(self, description: str) -> bool:
         """Determine if a transaction is likely an expense based on description"""
+        
+        # Clear income indicators - these should be positive
+        income_indicators = [
+            'משכורת', 'רבית', 'הפקדת שיק', 'זיכוי', 'החזר', 'הכנסה',
+            'קצבת ילדים', 'שכר', 'פרילנס', 'העברת משכורת', 'שיק תרזחה',
+            'פרעון פקדון', 'ריבית לפקדון', 'זיכוי עמ.הישיר'
+        ]
+        
+        # Clear expense indicators - these should be negative  
         expense_indicators = [
             'כרטיסי אשראי', 'מכבי', 'משכנתא', 'גמל', 'פיננ', 'עמלות',
-            'מס הכנסה', 'פיקדון', 'תשלום', 'העברה דיגיטל'
+            'מס הכנסה', 'תשלום', 'עמל.ערוץ יש',
+            'הזיו ימואל', 'הפועלים-ביט', 'מפייבוקס שלי'
         ]
         
-        income_indicators = [
-            'משכורת', 'רבית', 'הפקדת שיק', 'זיכוי', 'החזר'
-        ]
-        
-        # Check for income first
+        # Check for income first - these should be positive
         for indicator in income_indicators:
             if indicator in description:
                 return False
         
-        # Check for expense indicators
+        # Check for expense indicators - these should be negative
         for indicator in expense_indicators:
             if indicator in description:
                 return True
         
-        # Default to expense if unsure
+        # For ambiguous cases, look at common patterns
+        # Self transfers and internal transfers should be negative (outgoing)
+        if any(word in description for word in ['העברה עצמית', 'העברה פנימית']):
+            return True
+            
+        # Digital transfers are ambiguous - they can be income or expense
+        # For now, treat them as income (positive) since large amounts are often incoming
+        if 'העברה דיגיטל' in description:
+            return False  # Treat as income
+            
+        # Default to expense for unknown transactions (safer assumption)
         return True
     
     def _validate_transactions(self, transactions: List[Dict]) -> List[Dict]:

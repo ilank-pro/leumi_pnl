@@ -46,4 +46,8 @@ Thumbs.db
 
 # Temporary files
 *.tmp
-*.temp 
+*.temp
+
+# Data files
+*.pdf
+*.csv 
