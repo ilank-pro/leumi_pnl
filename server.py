@@ -208,6 +208,213 @@ def upload_pdf():
     except Exception as e:
         return jsonify({'error': f'Processing failed: {str(e)}'}), 500
 
+def process_single_file(file, account_name=None):
+    """Process a single file and return account data"""
+    # Validate file
+    if not allowed_file(file.filename):
+        raise ValueError(f'File type not supported: {file.filename}')
+    
+    # Check file size
+    file.seek(0, 2)  # Seek to end
+    file_size = file.tell()
+    file.seek(0)  # Reset to beginning
+    
+    if file_size > MAX_FILE_SIZE:
+        raise ValueError(f'File too large: {file_size // (1024*1024)}MB (max {MAX_FILE_SIZE // (1024*1024)}MB)')
+    
+    # Get file extension
+    file_ext = get_file_extension(file.filename)
+    
+    # Generate unique filename
+    unique_filename = f"{uuid.uuid4()}.{file_ext}"
+    file_path = os.path.join(UPLOAD_FOLDER, unique_filename)
+    
+    # Save uploaded file
+    file.save(file_path)
+    
+    try:
+        if file_ext == 'pdf':
+            # Process PDF file
+            parser = BankLeumiPDFParser()
+            
+            # Extract text from PDF
+            text = parser.extract_text_from_pdf(file_path)
+            
+            if not text.strip():
+                raise ValueError('No text could be extracted from the PDF')
+            
+            # Parse transactions
+            transactions = parser.parse_transactions(text)
+            
+            if not transactions:
+                raise ValueError('No transactions found in the PDF')
+            
+            # Sort transactions by date
+            transactions.sort(key=lambda x: x['date'])
+            
+            # Convert to CSV format
+            import io
+            import csv as csv_module
+            
+            output = io.StringIO()
+            csv_writer = csv_module.writer(output, quoting=csv_module.QUOTE_MINIMAL)
+            
+            # Write header
+            csv_writer.writerow(["Date", "Description", "Amount", "Balance"])
+            
+            # Write transactions
+            for transaction in transactions:
+                csv_writer.writerow([
+                    transaction['date'].strftime('%Y-%m-%d'),
+                    transaction['description'],
+                    round(transaction['amount'], 2),
+                    round(transaction['balance'], 2)
+                ])
+            
+            csv_content = output.getvalue()
+            output.close()
+            
+            return {
+                'csv_data': csv_content,
+                'transaction_count': len(transactions),
+                'file_type': 'PDF'
+            }
+            
+        elif file_ext == 'xls':
+            # Process XLS file
+            parser = BankLeumiXLSParser()
+            
+            # Extract HTML from XLS file
+            html_content = parser.extract_html_from_xls(file_path)
+            
+            if not html_content.strip():
+                raise ValueError('No content could be extracted from the XLS')
+            
+            # Parse transactions
+            transactions = parser.parse_transactions(html_content)
+            
+            if not transactions:
+                raise ValueError('No transactions found in the XLS')
+            
+            # Sort transactions by date
+            transactions.sort(key=lambda x: x['date'])
+            
+            # Convert to CSV format
+            import io
+            import csv as csv_module
+            
+            output = io.StringIO()
+            csv_writer = csv_module.writer(output, quoting=csv_module.QUOTE_MINIMAL)
+            
+            # Write header
+            csv_writer.writerow(["Date", "Description", "Amount", "Balance"])
+            
+            # Write transactions
+            for transaction in transactions:
+                csv_writer.writerow([
+                    transaction['date'].strftime('%Y-%m-%d'),
+                    transaction['description'],
+                    round(transaction['amount'], 2),
+                    round(transaction['balance'], 2)
+                ])
+            
+            csv_content = output.getvalue()
+            output.close()
+            
+            return {
+                'csv_data': csv_content,
+                'transaction_count': len(transactions),
+                'file_type': 'XLS'
+            }
+            
+        elif file_ext == 'csv':
+            # For CSV files, just read and return the content
+            with open(file_path, 'r', encoding='utf-8') as f:
+                csv_content = f.read()
+            
+            # Count lines (approximate transaction count)
+            line_count = len(csv_content.strip().split('\n')) - 1  # Minus header
+            
+            return {
+                'csv_data': csv_content,
+                'transaction_count': max(0, line_count),
+                'file_type': 'CSV'
+            }
+    
+    finally:
+        # Clean up uploaded file
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+
+@app.route('/upload-multiple', methods=['POST'])
+def upload_multiple():
+    """Handle multiple file uploads and return account data"""
+    try:
+        # Check if files were uploaded
+        if 'files' not in request.files:
+            return jsonify({'error': 'No files uploaded'}), 400
+        
+        files = request.files.getlist('files')
+        if not files or all(file.filename == '' for file in files):
+            return jsonify({'error': 'No files selected'}), 400
+        
+        accounts = []
+        total_transactions = 0
+        errors = []
+        
+        for i, file in enumerate(files):
+            if file.filename == '':
+                continue
+                
+            try:
+                # Generate account name from filename (remove extension)
+                account_name = file.filename.rsplit('.', 1)[0]
+                
+                # Process the file
+                result = process_single_file(file)
+                
+                # Create account data
+                account_data = {
+                    'id': f'account_{i}',
+                    'name': account_name,
+                    'filename': file.filename,
+                    'csv_data': result['csv_data'],
+                    'transaction_count': result['transaction_count'],
+                    'file_type': result['file_type']
+                }
+                
+                accounts.append(account_data)
+                total_transactions += result['transaction_count']
+                
+                print(f"Successfully processed {result['file_type']} file: {file.filename} ({result['transaction_count']} transactions)")
+                
+            except Exception as e:
+                error_msg = f"Failed to process {file.filename}: {str(e)}"
+                errors.append(error_msg)
+                print(f"Error processing {file.filename}: {str(e)}")
+        
+        if not accounts:
+            error_details = '; '.join(errors) if errors else 'No valid files could be processed'
+            return jsonify({'error': f'No files could be processed. {error_details}'}), 400
+        
+        response_data = {
+            'success': True,
+            'accounts': accounts,
+            'total_files': len(accounts),
+            'total_transactions': total_transactions,
+            'message': f'Successfully processed {len(accounts)} files with {total_transactions} total transactions'
+        }
+        
+        if errors:
+            response_data['warnings'] = errors
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        return jsonify({'error': f'Multiple file processing failed: {str(e)}'}), 500
+
 @app.route('/health', methods=['GET'])
 def health_check():
     """Health check endpoint"""
@@ -234,18 +441,22 @@ if __name__ == '__main__':
     print(f"📊 Dashboard URL: http://localhost:5001")
     print(f"🔧 API Health Check: http://localhost:5001/health")
     print(f"📁 Upload Endpoint: http://localhost:5001/upload-pdf")
+    print(f"📁 Multiple Upload Endpoint: http://localhost:5001/upload-multiple")
     print("=" * 50)
     print("Features:")
     print("✅ PDF processing with Bank Leumi format support")
     print("✅ CSV file processing")
+    print("✅ XLS file processing")
+    print("✅ Multiple file upload support")
     print("✅ Hebrew text support")
     print("✅ Automatic transaction classification")
     print("✅ CORS enabled for cross-origin requests")
     print("=" * 50)
     print("Usage:")
     print("1. Navigate to http://localhost:5001 in your browser")
-    print("2. Upload a Bank Leumi PDF statement or CSV file")
-    print("3. View your P&L analysis")
+    print("2. Upload Bank Leumi PDF, CSV, or XLS files (single or multiple)")
+    print("3. Select accounts to include in analysis")
+    print("4. View your combined P&L analysis")
     print("=" * 50)
     print("Press Ctrl+C to stop the server")
     print()

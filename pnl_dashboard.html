@@ -101,6 +101,130 @@
             display: none;
         }
         
+        .account-selection {
+            background: #f0f8ff;
+            border: 2px solid #0052cc;
+            border-radius: 15px;
+            padding: 25px;
+            margin: 30px 0;
+            display: none;
+        }
+        
+        .account-selection h3 {
+            color: #0052cc;
+            margin-bottom: 20px;
+            text-align: center;
+            font-size: 1.3em;
+        }
+        
+        .account-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        
+        .account-item {
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+            padding: 15px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        
+        .account-item:hover {
+            border-color: #0052cc;
+            box-shadow: 0 2px 8px rgba(0,82,204,0.1);
+        }
+        
+        .account-item.selected {
+            border-color: #0052cc;
+            background: #e3f2fd;
+        }
+        
+        .account-checkbox {
+            margin-left: 10px;
+            transform: scale(1.2);
+        }
+        
+        .account-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .account-name {
+            font-weight: 600;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .account-details {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .account-stats {
+            display: flex;
+            justify-content: space-between;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        .account-controls {
+            text-align: center;
+            margin-top: 20px;
+            border-top: 1px solid #ddd;
+            padding-top: 20px;
+        }
+        
+        .account-button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 5px;
+            min-width: 120px;
+        }
+        
+        .select-all-btn {
+            background: #28a745;
+            color: white;
+        }
+        
+        .select-all-btn:hover {
+            background: #218838;
+        }
+        
+        .select-none-btn {
+            background: #6c757d;
+            color: white;
+        }
+        
+        .select-none-btn:hover {
+            background: #5a6268;
+        }
+        
+        .proceed-btn {
+            background: #0052cc;
+            color: white;
+        }
+        
+        .proceed-btn:hover {
+            background: #0066ff;
+        }
+        
+        .proceed-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
         .filter-section {
             background: #f8f9fa;
             border: 2px solid #0052cc;
@@ -462,18 +586,19 @@
         </div>
         
         <div class="upload-section" id="uploadSection">
-            <h3>העלאת קובץ נתונים</h3>
-            <p>גרור קובץ PDF, XLS או CSV לכאן או לחץ לבחירת קובץ</p>
+            <h3>העלאת קבצי נתונים</h3>
+            <p>גרור קבצים או לחץ לבחירת קבצים (תומך בקבצים מרובים)</p>
             <div style="margin: 15px 0; font-size: 14px; color: #666;">
                 <strong>פורמטים נתמכים:</strong><br>
                 • <strong>PDF:</strong> דוחות בנק לאומי (עיבוד אוטומטי)<br>
                 • <strong>XLS:</strong> דוחות בנק לאומי (עיבוד אוטומטי)<br>
                 • <strong>CSV:</strong> פורמט בנק V1/V2 או פורמט סטנדרטי<br>
-                • עיבוד מתוח באמצעות שרת Python מקומי
+                • עיבוד מתוח באמצעות שרת Python מקומי<br>
+                • <strong>ניתן להעלות מספר קבצים מחשבונות שונים</strong>
             </div>
-            <input type="file" id="dataFile" class="upload-input" accept=".csv,.pdf,.xls" />
+            <input type="file" id="dataFile" class="upload-input" accept=".csv,.pdf,.xls" multiple />
             <button class="upload-button" onclick="document.getElementById('dataFile').click()">
-                בחר קובץ PDF, CSV או XLS
+                בחר קבצים (PDF, CSV, XLS)
             </button>
             <div class="file-info" id="fileInfo"></div>
             <div class="error-message" id="errorMessage"></div>
@@ -482,6 +607,27 @@
         <div class="loading" id="loading">
             <div class="loading-spinner"></div>
             <p>מעבד נתונים...</p>
+        </div>
+        
+        <div class="account-selection" id="accountSelection">
+            <h3>🏦 בחירת חשבונות לניתוח</h3>
+            <p style="text-align: center; color: #666; margin-bottom: 20px;">
+                בחר אילו חשבונות לכלול בניתוח המשולב
+            </p>
+            <div class="account-grid" id="accountGrid">
+                <!-- Account items will be populated here -->
+            </div>
+            <div class="account-controls">
+                <button class="account-button select-all-btn" onclick="selectAllAccounts()">
+                    בחר הכל
+                </button>
+                <button class="account-button select-none-btn" onclick="selectNoAccounts()">
+                    בטל בחירה
+                </button>
+                <button class="account-button proceed-btn" id="proceedBtn" onclick="proceedWithSelectedAccounts()" disabled>
+                    המשך לניתוח (<span id="selectedCount">0</span> חשבונות)
+                </button>
+            </div>
         </div>
         
         <div class="filter-section" id="filterSection" style="display: none;">
@@ -608,12 +754,23 @@
     </div>
 
     <script>
+        // Single account data (legacy)
         let pnlData = [];
         let monthlyData = {};
         let expensesByCategory = {}; // New: track expenses by category per month
         let availableCategories = []; // New: list of expense categories
         let charts = {};
         let categorySelectHandler = null;
+        
+        // Multi-account data
+        let accountsData = [];  // Array of account objects
+        let selectedAccounts = new Set();  // Track selected accounts for analysis
+        let combinedData = [];  // Merged data from selected accounts
+        let isMultiAccountMode = false;  // Flag to track if we're in multi-account mode
+        
+        // Date filtering globals
+        let filteredData = null;
+        let dateFilterActive = false;
         
         // Initialize upload functionality
         document.addEventListener('DOMContentLoaded', function() {
@@ -639,17 +796,151 @@
                 
                 const files = e.dataTransfer.files;
                 if (files.length > 0) {
-                    handleFileUpload(files[0]);
+                    handleMultipleFileUpload(Array.from(files));
                 }
             });
             
             // File input change
             dataFile.addEventListener('change', function(e) {
                 if (e.target.files.length > 0) {
-                    handleFileUpload(e.target.files[0]);
+                    handleMultipleFileUpload(Array.from(e.target.files));
                 }
             });
         });
+        
+        async function handleMultipleFileUpload(files) {
+            const fileInfo = document.getElementById('fileInfo');
+            const errorMessage = document.getElementById('errorMessage');
+            const loading = document.getElementById('loading');
+            
+            // Reset previous states
+            fileInfo.style.display = 'none';
+            errorMessage.style.display = 'none';
+            document.getElementById('accountSelection').style.display = 'none';
+            document.getElementById('filterSection').style.display = 'none';
+            document.getElementById('dashboardContent').style.display = 'none';
+            
+            // Check if any files were provided
+            if (files.length === 0) {
+                showError('לא נבחרו קבצים');
+                return;
+            }
+            
+            // Validate file types
+            const validFiles = [];
+            const invalidFiles = [];
+            
+            for (const file of files) {
+                const fileName = file.name.toLowerCase();
+                const isPDF = fileName.endsWith('.pdf');
+                const isCSV = fileName.endsWith('.csv');
+                const isXLS = fileName.endsWith('.xls');
+                
+                if (isPDF || isCSV || isXLS) {
+                    validFiles.push(file);
+                } else {
+                    invalidFiles.push(file.name);
+                }
+            }
+            
+            if (validFiles.length === 0) {
+                showError('לא נמצאו קבצים תקינים. אנא בחר קבצי PDF, CSV או XLS בלבד');
+                return;
+            }
+            
+            if (invalidFiles.length > 0) {
+                console.warn('קבצים לא תקינים שנמצאו:', invalidFiles);
+            }
+            
+            // Show file info
+            const fileTypeCounts = {pdf: 0, csv: 0, xls: 0};
+            validFiles.forEach(file => {
+                const ext = file.name.toLowerCase().split('.').pop();
+                if (ext in fileTypeCounts) fileTypeCounts[ext]++;
+            });
+            
+            const fileInfoText = [
+                `נבחרו ${validFiles.length} קבצים תקינים:`,
+                fileTypeCounts.pdf > 0 ? `${fileTypeCounts.pdf} PDF` : '',
+                fileTypeCounts.csv > 0 ? `${fileTypeCounts.csv} CSV` : '',
+                fileTypeCounts.xls > 0 ? `${fileTypeCounts.xls} XLS` : ''
+            ].filter(text => text !== '').join(' • ');
+            
+            fileInfo.innerHTML = fileInfoText;
+            fileInfo.style.display = 'block';
+            
+            // Show loading
+            loading.style.display = 'block';
+            
+            // Determine processing mode
+            if (validFiles.length === 1) {
+                // Single file mode - use existing logic
+                isMultiAccountMode = false;
+                await handleFileUpload(validFiles[0]);
+            } else {
+                // Multiple file mode - use new logic
+                isMultiAccountMode = true;
+                await handleMultipleServerUpload(validFiles);
+            }
+        }
+        
+        async function handleMultipleServerUpload(files) {
+            const loading = document.getElementById('loading');
+            
+            try {
+                // Create FormData for multiple file upload
+                const formData = new FormData();
+                files.forEach(file => {
+                    formData.append('files', file);
+                });
+                
+                // Update loading message
+                loading.innerHTML = '<div class="loading-spinner"></div><p>מעבד קבצים מרובים...</p>';
+                
+                // Send to server
+                const response = await fetch('/upload-multiple', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || 'שגיאה בהעלאת הקבצים');
+                }
+                
+                // Store account data
+                accountsData = data.accounts;
+                selectedAccounts.clear();
+                
+                // Initially select all accounts
+                data.accounts.forEach(account => {
+                    selectedAccounts.add(account.id);
+                });
+                
+                // Hide loading
+                loading.style.display = 'none';
+                
+                // Show account selection
+                try {
+                    console.log('About to call displayAccountSelection()');
+                    displayAccountSelection();
+                } catch (error) {
+                    console.error('Error in displayAccountSelection():', error);
+                }
+                
+                console.log(`Successfully processed ${data.total_files} files with ${data.total_transactions} total transactions`);
+                
+                if (data.warnings && data.warnings.length > 0) {
+                    console.warn('Upload warnings:', data.warnings);
+                }
+                
+            } catch (error) {
+                console.error('Multiple file upload error:', error);
+                loading.style.display = 'none';
+                showError(`שגיאה בעיבוד הקבצים: ${error.message}`);
+            }
+        }
         
         async function handleFileUpload(file) {
             const fileInfo = document.getElementById('fileInfo');
@@ -1074,9 +1365,314 @@
             return 'אחר';
         }
         
+        // Multi-account CSV parser that returns data instead of modifying globals
+        function parseCSVToArray(csv) {
+            console.log('=== parseCSVToArray called ===');
+            console.log('CSV length:', csv.length);
+            
+            // Handle both Unix (\n) and Windows (\r\n) line endings
+            const lines = csv.trim().replace(/\r\n/g, '\n').split('\n');
+            const headers = lines[0].split(',');
+            
+            // Check if it's Bank format (Date,Description,Amount,Balance)
+            const isBankFormat = headers.length === 4 && headers[0] === 'Date' && headers[3] === 'Balance';
+            
+            if (!isBankFormat) {
+                console.error('Unsupported CSV format for multi-account:', headers);
+                return [];
+            }
+            
+            const transactions = [];
+            
+            // Parse Bank Format V2 (YYYY-MM-DD dates with signed amounts)
+            for (let i = 1; i < lines.length; i++) {
+                const row = parseCSVLine(lines[i]);
+                if (row.length >= 4) {
+                    const dateStr = row[0];
+                    const description = row[1];
+                    const amount = parseFloat(row[2]);
+                    const balance = parseFloat(row[3]);
+                    
+                    // Parse YYYY-MM-DD format
+                    const date = new Date(dateStr);
+                    
+                    if (!isNaN(date.getTime()) && !isNaN(amount) && !isNaN(balance)) {
+                        let actualAmount = amount;
+                        let type = amount >= 0 ? 'Income' : 'Expense';
+                        
+                        // For expenses, make amount negative
+                        if (type === 'Expense') {
+                            actualAmount = -Math.abs(amount);
+                        } else {
+                            actualAmount = Math.abs(amount);
+                        }
+                        
+                        const category = extractCategory(description);
+                        
+                        transactions.push({
+                            date: date,
+                            description: description,
+                            amount: actualAmount,
+                            category: category,
+                            type: type
+                        });
+                    }
+                }
+            }
+            
+            console.log(`parseCSVToArray parsed ${transactions.length} transactions`);
+            return transactions;
+        }
+        
+        // Account management functions
+        function displayAccountSelection() {
+            console.log('=== displayAccountSelection called ===');
+            console.log('accountsData length:', accountsData.length);
+            console.log('accountsData:', accountsData.map(acc => ({id: acc.id, name: acc.name})));
+            
+            const accountGrid = document.getElementById('accountGrid');
+            const accountSelection = document.getElementById('accountSelection');
+            
+            console.log('accountGrid element:', accountGrid);
+            console.log('accountSelection element:', accountSelection);
+            
+            if (!accountGrid || !accountSelection) {
+                console.error('Missing DOM elements - accountGrid or accountSelection not found');
+                return;
+            }
+            
+            accountGrid.innerHTML = '';
+            
+            accountsData.forEach(account => {
+                const accountItem = document.createElement('div');
+                accountItem.className = 'account-item';
+                accountItem.setAttribute('data-account-id', account.id);
+                
+                if (selectedAccounts.has(account.id)) {
+                    accountItem.classList.add('selected');
+                }
+                
+                // Calculate date range for account
+                const lines = account.csv_data.split('\n');
+                let firstDate = null, lastDate = null;
+                
+                for (let i = 1; i < lines.length; i++) { // Skip header
+                    const line = lines[i].trim();
+                    if (line) {
+                        const dateStr = line.split(',')[0];
+                        const date = new Date(dateStr);
+                        if (!isNaN(date)) {
+                            if (!firstDate || date < firstDate) firstDate = date;
+                            if (!lastDate || date > lastDate) lastDate = date;
+                        }
+                    }
+                }
+                
+                const dateRange = firstDate && lastDate ? 
+                    `${firstDate.toLocaleDateString('he-IL')} - ${lastDate.toLocaleDateString('he-IL')}` : 
+                    'טווח תאריכים לא זמין';
+                
+                accountItem.innerHTML = `
+                    <div class="account-info">
+                        <div class="account-name">${account.name}</div>
+                        <input type="checkbox" class="account-checkbox" 
+                               ${selectedAccounts.has(account.id) ? 'checked' : ''}
+                               onchange="toggleAccountSelection('${account.id}')">
+                    </div>
+                    <div class="account-details">📁 ${account.filename} (${account.file_type})</div>
+                    <div class="account-details">📅 ${dateRange}</div>
+                    <div class="account-stats">
+                        <span>💰 ${account.transaction_count} תנועות</span>
+                        <span>📊 ${(account.csv_data.length / 1024).toFixed(1)} KB</span>
+                    </div>
+                `;
+                
+                // Add click handler to toggle selection
+                accountItem.addEventListener('click', (e) => {
+                    if (e.target.type !== 'checkbox') {
+                        toggleAccountSelection(account.id);
+                    }
+                });
+                
+                accountGrid.appendChild(accountItem);
+            });
+            
+            updateAccountSelectionDisplay();
+            
+            console.log('Setting accountSelection.style.display = block');
+            accountSelection.style.display = 'block';
+            console.log('accountSelection.style.display after setting:', accountSelection.style.display);
+            console.log('=== displayAccountSelection completed ===');
+        }
+        
+        function toggleAccountSelection(accountId) {
+            const accountItem = document.querySelector(`[data-account-id="${accountId}"]`);
+            const checkbox = accountItem.querySelector('.account-checkbox');
+            
+            if (selectedAccounts.has(accountId)) {
+                selectedAccounts.delete(accountId);
+                accountItem.classList.remove('selected');
+                checkbox.checked = false;
+            } else {
+                selectedAccounts.add(accountId);
+                accountItem.classList.add('selected');
+                checkbox.checked = true;
+            }
+            
+            updateAccountSelectionDisplay();
+            clearDashboardOnSelectionChange();
+        }
+        
+        function selectAllAccounts() {
+            accountsData.forEach(account => {
+                selectedAccounts.add(account.id);
+                const accountItem = document.querySelector(`[data-account-id="${account.id}"]`);
+                const checkbox = accountItem.querySelector('.account-checkbox');
+                accountItem.classList.add('selected');
+                checkbox.checked = true;
+            });
+            updateAccountSelectionDisplay();
+            clearDashboardOnSelectionChange();
+        }
+        
+        function selectNoAccounts() {
+            selectedAccounts.clear();
+            accountsData.forEach(account => {
+                const accountItem = document.querySelector(`[data-account-id="${account.id}"]`);
+                const checkbox = accountItem.querySelector('.account-checkbox');
+                accountItem.classList.remove('selected');
+                checkbox.checked = false;
+            });
+            updateAccountSelectionDisplay();
+            clearDashboardOnSelectionChange();
+        }
+        
+        function updateAccountSelectionDisplay() {
+            const selectedCount = selectedAccounts.size;
+            const proceedBtn = document.getElementById('proceedBtn');
+            const selectedCountSpan = document.getElementById('selectedCount');
+            
+            selectedCountSpan.textContent = selectedCount;
+            proceedBtn.disabled = selectedCount === 0;
+        }
+        
+        function clearDashboardOnSelectionChange() {
+            // Reset date filter state when account selection changes
+            dateFilterActive = false;
+            filteredData = null;
+            
+            // Reset dropdown selections
+            const startMonthFilter = document.getElementById('startMonthFilter');
+            const endMonthFilter = document.getElementById('endMonthFilter');
+            if (startMonthFilter) startMonthFilter.selectedIndex = 0;
+            if (endMonthFilter) endMonthFilter.selectedIndex = 0;
+            
+            // Hide filter status
+            const filterStatus = document.getElementById('filterStatus');
+            if (filterStatus) filterStatus.classList.remove('active');
+        }
+        
+        function proceedWithSelectedAccounts() {
+            if (selectedAccounts.size === 0) {
+                showError('אנא בחר לפחות חשבון אחד לניתוח');
+                return;
+            }
+            
+            console.log('=== PROCEED DEBUG ===');
+            console.log('Selected accounts:', Array.from(selectedAccounts));
+            console.log('Total accounts available:', accountsData.length);
+            
+            // Combine data from selected accounts
+            combineCombinedData();
+            
+            console.log('Combined data length after merge:', combinedData.length);
+            console.log('First few combined transactions:', combinedData.slice(0, 3));
+            
+            // Keep account selection visible for reference
+            
+            // Process combined data
+            pnlData = combinedData; // Set as current data for processing
+            console.log('pnlData length after assignment:', pnlData.length);
+            
+            processData();
+            updateDashboard();
+            
+            // Populate date filters after data is processed
+            populateDateFilters();
+            
+            // Show filter section and dashboard
+            document.getElementById('filterSection').style.display = 'block';
+            document.getElementById('dashboardContent').style.display = 'block';
+        }
+        
+        function combineCombinedData() {
+            console.log('=== COMBINE DEBUG START ===');
+            combinedData = [];
+            
+            console.log('selectedAccounts:', Array.from(selectedAccounts));
+            console.log('accountsData:', accountsData.map(acc => ({id: acc.id, name: acc.name, transactionCount: acc.transaction_count})));
+            
+            selectedAccounts.forEach((accountId, index) => {
+                console.log(`Processing account ${index + 1}/${selectedAccounts.size}: ${accountId}`);
+                
+                const account = accountsData.find(acc => acc.id === accountId);
+                console.log('Found account:', account ? {id: account.id, name: account.name, csvData: typeof account.csv_data, csvLength: account.csv_data?.length} : 'NOT FOUND');
+                console.log('Full account object keys:', account ? Object.keys(account) : 'N/A');
+                console.log('Full account object:', account);
+                
+                if (account && account.csv_data) {
+                    try {
+                        console.log(`Parsing CSV for ${account.name}...`);
+                        const accountData = parseCSVToArray(account.csv_data);
+                        console.log('parseCSVToArray returned:', typeof accountData, accountData);
+                        
+                        if (!accountData || !Array.isArray(accountData)) {
+                            console.error(`parseCSVToArray returned invalid data for ${account.name}:`, accountData);
+                            return; // Skip this account
+                        }
+                        
+                        console.log(`Parsed ${accountData.length} transactions for ${account.name}`);
+                        
+                        // Add account identifier to each transaction
+                        accountData.forEach(transaction => {
+                            transaction.account = account.name;
+                            transaction.accountId = account.id;
+                        });
+                        
+                        console.log(`Before push: combinedData.length = ${combinedData.length}`);
+                        combinedData.push(...accountData);
+                        console.log(`After push: combinedData.length = ${combinedData.length}`);
+                    } catch (error) {
+                        console.error(`Error parsing CSV for ${account.name}:`, error);
+                        console.error('Account csv_data type:', typeof account.csv_data);
+                        console.error('Account csv_data length:', account.csv_data?.length);
+                        console.error('Account csv_data preview:', account.csv_data?.substring(0, 200));
+                    }
+                } else if (account) {
+                    console.error(`Account ${account.name} found but csv_data is missing!`);
+                    console.error('Available properties:', Object.keys(account));
+                    console.error('Account object:', account);
+                } else {
+                    console.error(`Account not found: ${accountId}`);
+                    console.error('Available account IDs:', accountsData.map(acc => acc.id));
+                }
+            });
+            
+            // Sort combined data by date
+            combinedData.sort((a, b) => a.date - b.date);
+            
+            console.log(`=== COMBINE DEBUG END ===`);
+            console.log(`Final: Combined ${combinedData.length} transactions from ${selectedAccounts.size} accounts`);
+        }
+        
         function processData() {
             // Use filtered data if filter is active, otherwise use all data
             const dataToProcess = dateFilterActive ? filteredData : pnlData;
+            
+            console.log('=== PROCESS DATA DEBUG ===');
+            console.log('dateFilterActive:', dateFilterActive);
+            console.log('pnlData.length:', pnlData.length);
+            console.log('dataToProcess.length:', dataToProcess.length);
             
             monthlyData = {};
             expensesByCategory = {};
@@ -1137,6 +1733,12 @@
             const totalExpenses = Object.values(monthlyData).reduce((sum, month) => sum + month.expenses, 0);
             const netProfit = totalIncome - totalExpenses;
             const avgMonthlyProfit = netProfit / Object.keys(monthlyData).length;
+            
+            console.log('=== INCOME CALCULATION DEBUG ===');
+            console.log('Monthly data keys:', Object.keys(monthlyData));
+            console.log('Monthly income values:', Object.values(monthlyData).map(m => m.income));
+            console.log('Total income calculated:', totalIncome);
+            console.log('Total expenses calculated:', totalExpenses);
             
             const summaryStats = document.getElementById('summaryStats');
             summaryStats.innerHTML = `
@@ -1627,8 +2229,6 @@
         }
         
         // Date Filtering Functions
-        let filteredData = null;
-        let dateFilterActive = false;
         
         function populateDateFilters() {
             const startSelect = document.getElementById('startMonthFilter');
