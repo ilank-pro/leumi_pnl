@@ -950,9 +950,16 @@
                 
                 <div class="grid">
                     <div class="card full-width">
+                        <h3>📈 צמיחת החסכונות על פני השנים</h3>
+                        <div class="chart-container">
+                            <canvas id="savingsGrowthChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <div class="card full-width">
                         <h3>📊 מצב חסכונות לעומת המלצות</h3>
-                        <div id="benchmarkComparison">
-                            <!-- Benchmark comparison will be populated here -->
+                        <div class="chart-container">
+                            <canvas id="benchmarkChart"></canvas>
                         </div>
                     </div>
                     
@@ -2710,15 +2717,19 @@
             resultsDiv.innerHTML = `
                 <div class="result-card">
                     <div class="result-label">הכנסה חודשית ממוצעת</div>
-                    <div class="result-value">₪${data.monthlyIncome.toLocaleString()}</div>
+                    <div class="result-value">₪${Math.round(data.monthlyIncome).toLocaleString()}</div>
                 </div>
                 <div class="result-card">
                     <div class="result-label">הוצאות חודשיות ממוצעות</div>
-                    <div class="result-value">₪${data.monthlyExpenses.toLocaleString()}</div>
+                    <div class="result-value">₪${Math.round(data.monthlyExpenses).toLocaleString()}</div>
                 </div>
                 <div class="result-card">
                     <div class="result-label">יעד לפרישה</div>
-                    <div class="result-value">₪${data.retirementTarget.toLocaleString()}</div>
+                    <div class="result-value">₪${Math.round(data.retirementTarget).toLocaleString()}</div>
+                    <div class="result-label" style="font-size: 12px; margin-top: 8px; color: #666;">
+                        חישוב: ₪${Math.round(data.monthlyExpenses).toLocaleString()} × 12 חודשים × 25 שנים<br>
+                        (בהנחת משיכה שנתית של 4% מהחיסכון)
+                    </div>
                 </div>
                 <div class="result-card">
                     <div class="result-label">גיל פרישה צפוי</div>
@@ -2734,29 +2745,164 @@
                 </div>
             `;
             
-            // Update benchmark comparison
-            updateBenchmarkComparison(data);
+            // Create benchmark chart
+            createBenchmarkChart(data);
             
             // Update recommendations
             updateSavingsRecommendations(data);
+            
+            // Create savings growth chart
+            createSavingsGrowthChart(data);
         }
         
-        function updateBenchmarkComparison(data) {
-            const benchmarkDiv = document.getElementById('benchmarkComparison');
-            const age = parseInt(document.getElementById('currentAge').value);
+        function createBenchmarkChart(data) {
+            const ctx = document.getElementById('benchmarkChart').getContext('2d');
+            const userAge = parseInt(document.getElementById('currentAge').value);
+            const userRatio = data.currentRatio;
             
-            benchmarkDiv.innerHTML = `
-                <div style="text-align: center; padding: 20px;">
-                    <h4>המלצה לגיל ${age}</h4>
-                    <p>טווח מומלץ: ${data.benchmark.min}x - ${data.benchmark.max}x מהמשכורת השנתית</p>
-                    <p>המצב שלך: <strong>${data.currentRatio.toFixed(1)}x</strong></p>
-                    <div class="benchmark-indicator benchmark-${data.benchmarkStatus}">
-                        ${data.benchmarkStatus === 'ahead' ? 'מעל ההמלצה - מצוין!' : 
-                          data.benchmarkStatus === 'ontrack' ? 'בטווח המומלץ' : 
-                          'מתחת להמלצה - כדאי לשפר'}
-                    </div>
-                </div>
-            `;
+            // Destroy existing chart if it exists
+            if (charts.benchmarkChart) {
+                charts.benchmarkChart.destroy();
+            }
+            
+            // Define benchmark data for all age groups
+            const ageGroups = [30, 35, 40, 45, 50, 55, 60, 65];
+            const benchmarkRanges = {
+                30: {min: 0.5, max: 0.5, midpoint: 0.5},
+                35: {min: 1.0, max: 1.5, midpoint: 1.25},
+                40: {min: 1.5, max: 2.5, midpoint: 2.0},
+                45: {min: 2.5, max: 4.0, midpoint: 3.25},
+                50: {min: 3.5, max: 5.5, midpoint: 4.5},
+                55: {min: 4.5, max: 8.0, midpoint: 6.25},
+                60: {min: 6.0, max: 11.0, midpoint: 8.5},
+                65: {min: 7.5, max: 13.5, midpoint: 10.5}
+            };
+            
+            // Find closest age group for user
+            const closestAge = ageGroups.reduce((prev, curr) => 
+                Math.abs(curr - userAge) < Math.abs(prev - userAge) ? curr : prev
+            );
+            
+            // Prepare chart data
+            const barData = ageGroups.map(age => {
+                const range = benchmarkRanges[age];
+                return {
+                    x: `Age ${age}`,
+                    y: [range.min, range.max]
+                };
+            });
+            
+            const midpointData = ageGroups.map(age => ({
+                x: `Age ${age}`,
+                y: benchmarkRanges[age].midpoint
+            }));
+            
+            // Create user position indicator
+            const userPositionData = ageGroups.map(age => ({
+                x: `Age ${age}`,
+                y: age === closestAge ? userRatio : null
+            }));
+            
+            charts.benchmarkChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ageGroups.map(age => `גיל ${age}`),
+                    datasets: [{
+                        label: 'טווח מומלץ',
+                        data: ageGroups.map(age => {
+                            const range = benchmarkRanges[age];
+                            return age === closestAge ? 
+                                [range.min, range.max] : [range.min, range.max];
+                        }),
+                        backgroundColor: ageGroups.map(age => 
+                            age === closestAge ? 'rgba(255, 159, 64, 0.7)' : 'rgba(54, 162, 235, 0.7)'
+                        ),
+                        borderColor: ageGroups.map(age => 
+                            age === closestAge ? 'rgba(255, 159, 64, 1)' : 'rgba(54, 162, 235, 1)'
+                        ),
+                        borderWidth: 2
+                    }, {
+                        label: 'נקודת אמצע',
+                        data: ageGroups.map(age => benchmarkRanges[age].midpoint),
+                        type: 'line',
+                        fill: false,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        borderWidth: 3,
+                        pointBackgroundColor: 'rgba(75, 192, 192, 1)',
+                        pointBorderColor: 'rgba(75, 192, 192, 1)',
+                        pointRadius: 6,
+                        tension: 0.1
+                    }, {
+                        label: `המצב שלך (${userRatio.toFixed(1)}x)`,
+                        data: ageGroups.map(age => age === closestAge ? userRatio : null),
+                        type: 'line',
+                        fill: false,
+                        borderColor: 'rgba(255, 0, 0, 1)',
+                        borderWidth: 4,
+                        pointBackgroundColor: 'rgba(255, 0, 0, 1)',
+                        pointBorderColor: 'rgba(255, 255, 255, 1)',
+                        pointBorderWidth: 3,
+                        pointRadius: 8,
+                        showLine: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `השוואת חסכונות לפי גיל - מיקומך בגיל ${userAge}`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const datasetLabel = context.dataset.label;
+                                    if (context.datasetIndex === 0) { // Range bars
+                                        const range = benchmarkRanges[ageGroups[context.dataIndex]];
+                                        return `${datasetLabel}: ${range.min}x - ${range.max}x`;
+                                    } else {
+                                        return `${datasetLabel}: ${context.parsed.y.toFixed(1)}x`;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 15,
+                            ticks: {
+                                callback: function(value) {
+                                    return value + 'x';
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'כפולות של הכנסה שנתית'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'גיל'
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
         }
         
         function updateSavingsRecommendations(data) {
@@ -2788,6 +2934,109 @@
                     ${recommendations.map(rec => `<li>${rec}</li>`).join('')}
                 </ul>
             `;
+        }
+        
+        function createSavingsGrowthChart(data) {
+            const ctx = document.getElementById('savingsGrowthChart').getContext('2d');
+            const age = parseInt(document.getElementById('currentAge').value);
+            const currentSavings = parseInt(document.getElementById('currentSavings').value);
+            const annualReturn = parseFloat(document.getElementById('annualReturn').value);
+            
+            // Destroy existing chart if it exists
+            if (charts.savingsGrowthChart) {
+                charts.savingsGrowthChart.destroy();
+            }
+            
+            // Generate data points every 5 years from current age to retirement age (max 85)
+            const maxAge = Math.min(Math.round(data.retirementAge) + 5, 85);
+            const years = [];
+            const savingsData = [];
+            const targetLine = [];
+            
+            for (let currentAge = age; currentAge <= maxAge; currentAge += 5) {
+                const yearsFromNow = currentAge - age;
+                const futureValue = currentSavings * Math.pow(1 + annualReturn, yearsFromNow);
+                
+                years.push(`גיל ${currentAge}`);
+                savingsData.push(Math.round(futureValue));
+                targetLine.push(Math.round(data.retirementTarget));
+            }
+            
+            charts.savingsGrowthChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: years,
+                    datasets: [{
+                        label: 'חסכונות צפויים',
+                        data: savingsData,
+                        backgroundColor: 'rgba(0, 82, 204, 0.7)',
+                        borderColor: 'rgba(0, 82, 204, 1)',
+                        borderWidth: 2
+                    }, {
+                        label: 'יעד לפרישה',
+                        data: targetLine,
+                        type: 'line',
+                        fill: false,
+                        borderColor: 'rgba(220, 53, 69, 1)',
+                        borderWidth: 3,
+                        borderDash: [5, 5],
+                        pointBackgroundColor: 'rgba(220, 53, 69, 1)',
+                        pointBorderColor: 'rgba(220, 53, 69, 1)',
+                        pointRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: `צמיחת חסכונות עם תשואה שנתית של ${(annualReturn * 100).toFixed(0)}%`,
+                            font: {
+                                size: 16,
+                                weight: 'bold'
+                            }
+                        },
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const value = context.parsed.y;
+                                    const label = context.dataset.label;
+                                    return `${label}: ₪${value.toLocaleString()}`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₪' + (value / 1000000).toFixed(1) + 'M';
+                                }
+                            },
+                            title: {
+                                display: true,
+                                text: 'סכום חסכונות (מיליוני ₪)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'גיל'
+                            }
+                        }
+                    },
+                    interaction: {
+                        intersect: false,
+                        mode: 'index'
+                    }
+                }
+            });
         }
         
     </script>
