@@ -196,7 +196,7 @@ class BankLeumiXLSParser:
         return "אחר"
     
     def parse_transactions(self, html_content: str) -> List[Dict]:
-        """Parse transactions from HTML content"""
+        """Parse transactions from HTML content with dynamic column detection"""
         try:
             soup = BeautifulSoup(html_content, 'lxml')
             transactions = []
@@ -207,7 +207,7 @@ class BankLeumiXLSParser:
             for t in soup.find_all('table'):
                 # Check if this table has transaction headers
                 headers = t.find_all('td', class_='xlHeader')
-                if len(headers) >= 6:  # Should have at least 6 columns
+                if len(headers) >= 5:  # Should have at least 5 columns (date, description, debit, credit, balance)
                     header_texts = [h.get_text(strip=True) for h in headers]
                     if any('תאריך' in text for text in header_texts):
                         table = t
@@ -219,8 +219,49 @@ class BankLeumiXLSParser:
             if self.verbose:
                 print("Found transaction table")
             
-            # Find all transaction rows (skip header row)
+            # Find column positions by analyzing headers
+            column_map = {}
+            header_row = None
+            
+            # Find the header row
             rows = table.find_all('tr')
+            for row in rows:
+                cells = row.find_all('td')
+                if any(cell.get('class') and 'xlHeader' in cell.get('class', []) for cell in cells):
+                    header_row = row
+                    break
+            
+            if not header_row:
+                raise ValueError("Could not find header row in table")
+            
+            # Map column positions based on Hebrew header text
+            header_cells = header_row.find_all('td', class_='xlHeader')
+            for i, cell in enumerate(header_cells):
+                header_text = cell.get_text(strip=True)
+                
+                if 'תאריך' in header_text and 'ערך' not in header_text:
+                    column_map['date'] = i
+                elif 'תיאור' in header_text:
+                    column_map['description'] = i
+                elif 'בחובה' in header_text or 'חובה' in header_text:
+                    column_map['debit'] = i
+                elif 'בזכות' in header_text or 'זכות' in header_text:
+                    column_map['credit'] = i
+                elif 'היתרה' in header_text or 'יתרה' in header_text:
+                    column_map['balance'] = i
+            
+            if self.verbose:
+                headers = [cell.get_text(strip=True) for cell in header_cells]
+                print(f"Headers found: {headers}")
+                print(f"Column mapping: {column_map}")
+            
+            # Validate that we found the essential columns
+            required_columns = ['date', 'description', 'debit', 'credit', 'balance']
+            missing_columns = [col for col in required_columns if col not in column_map]
+            if missing_columns:
+                raise ValueError(f"Could not find required columns: {missing_columns}")
+            
+            # Find all transaction rows (skip header row)
             header_found = False
             
             for row in rows:
@@ -230,23 +271,18 @@ class BankLeumiXLSParser:
                 if not header_found:
                     if any(cell.get('class') and 'xlHeader' in cell.get('class', []) for cell in cells):
                         header_found = True
-                        if self.verbose:
-                            headers = [cell.get_text(strip=True) for cell in cells]
-                            print(f"Headers found: {headers}")
                         continue
                     continue
                 
-                # Process transaction rows
-                if len(cells) >= 7:  # Should have at least 7 columns
+                # Process transaction rows - check if we have enough cells
+                if len(cells) >= max(column_map.values()) + 1:  # Ensure we have all required columns
                     try:
-                        # Extract data from cells
-                        date_str = cells[0].get_text(strip=True)  # תאריך
-                        # cells[1] is תאריך ערך (value date) - we can skip this
-                        description = cells[2].get_text(strip=True)  # תיאור
-                        # cells[3] is אסמכתא (reference) - we can skip this
-                        debit_str = cells[4].get_text(strip=True)  # בחובה
-                        credit_str = cells[5].get_text(strip=True)  # בזכות
-                        balance_str = cells[6].get_text(strip=True)  # היתרה בש"ח
+                        # Extract data from cells using dynamic positions
+                        date_str = cells[column_map['date']].get_text(strip=True)
+                        description = cells[column_map['description']].get_text(strip=True)
+                        debit_str = cells[column_map['debit']].get_text(strip=True)
+                        credit_str = cells[column_map['credit']].get_text(strip=True)
+                        balance_str = cells[column_map['balance']].get_text(strip=True)
                         
                         # Parse date
                         date = self.parse_date(date_str)
