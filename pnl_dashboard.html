@@ -928,6 +928,22 @@
                     </div>
                     
                     <div class="input-group">
+                        <label for="targetMonthlyExpense">הוצאות חודשיות לפרישה:</label>
+                        <select id="targetMonthlyExpense" onchange="calculateRetirementMetrics()">
+                            <option value="">בחר סכום</option>
+                            <!-- Options will be populated dynamically -->
+                        </select>
+                    </div>
+                    
+                    <div class="input-group">
+                        <label for="additionalMonthlySaving">חיסכון חודשי נוסף:</label>
+                        <select id="additionalMonthlySaving" onchange="calculateRetirementMetrics()">
+                            <option value="0">₪0 (ללא חיסכון נוסף)</option>
+                            <!-- Options will be populated dynamically -->
+                        </select>
+                    </div>
+                    
+                    <div class="input-group">
                         <label for="annualReturn">תשואה שנתית צפויה:</label>
                         <select id="annualReturn" onchange="calculateRetirementMetrics()">
                             <option value="0.01">1%</option>
@@ -942,6 +958,10 @@
                             <option value="0.10">10%</option>
                         </select>
                     </div>
+                </div>
+                
+                <div class="retirement-recommendations" id="retirementRecommendations" style="background: #e8f5e8; border-radius: 10px; padding: 15px; margin-bottom: 20px; display: none;">
+                    <!-- Cash flow and emergency fund recommendations will be populated here -->
                 </div>
                 
                 <div class="retirement-results" id="retirementResults">
@@ -2604,6 +2624,8 @@
             
             // Initialize retirement tab when first opened
             if (tabName === 'retirement') {
+                // Populate dropdowns only once when tab is opened
+                populateRetirementDropdowns();
                 calculateRetirementMetrics();
             }
         }
@@ -2616,20 +2638,32 @@
             
             if (!age || !savings || !annualReturn) {
                 document.getElementById('retirementResults').innerHTML = '<p style="text-align: center; color: #666;">אנא מלא את כל השדות לחישוב</p>';
+                document.getElementById('retirementRecommendations').style.display = 'none';
                 return;
             }
             
             // Calculate monthly averages from P&L data
             const monthlyIncome = calculateAverageMonthlyIncome();
             const monthlyExpenses = calculateAverageMonthlyExpenses();
+            const currentCashFlow = monthlyIncome - monthlyExpenses;
             const annualIncome = monthlyIncome * 12;
-            const annualExpenses = monthlyExpenses * 12;
             
-            // Calculate retirement needs (25x annual expenses - 4% rule)
-            const retirementTarget = annualExpenses * 25;
+            // Get user selections for target expenses and additional savings
+            const targetMonthlyExpense = parseInt(document.getElementById('targetMonthlyExpense').value) || monthlyExpenses;
+            const additionalMonthlySaving = parseInt(document.getElementById('additionalMonthlySaving').value) || 0;
             
-            // Calculate years to retirement
-            const yearsToRetirement = calculateYearsToRetirement(savings, retirementTarget, annualReturn);
+            // Update mandatory savings calculation
+            updateAdditionalMonthlySavingsWithMandatory();
+            
+            // Use total monthly savings (additional + mandatory if selected)
+            const totalMonthlySaving = window.totalMonthlySavings || additionalMonthlySaving;
+            
+            // Calculate retirement needs based on target expenses (25x annual expenses - 4% rule)
+            const targetAnnualExpenses = targetMonthlyExpense * 12;
+            const retirementTarget = targetAnnualExpenses * 25;
+            
+            // Calculate years to retirement with total monthly savings (additional + mandatory)
+            const yearsToRetirement = calculateYearsToRetirementWithSavings(savings, retirementTarget, annualReturn, totalMonthlySaving);
             const retirementAge = age + yearsToRetirement;
             
             // Get benchmark for current age
@@ -2641,14 +2675,26 @@
             displayRetirementResults({
                 monthlyIncome,
                 monthlyExpenses,
+                currentCashFlow,
                 annualIncome,
-                annualExpenses,
+                targetMonthlyExpense,
+                targetAnnualExpenses,
+                additionalMonthlySaving,
+                totalMonthlySaving,
                 retirementTarget,
                 yearsToRetirement,
                 retirementAge,
                 currentRatio,
                 benchmark,
                 benchmarkStatus
+            });
+            
+            // Display recommendations
+            displayCashFlowRecommendations({
+                monthlyIncome,
+                monthlyExpenses,
+                currentCashFlow,
+                additionalMonthlySaving
             });
         }
         
@@ -2674,6 +2720,476 @@
             // Using compound interest formula: A = P(1 + r)^t
             // Solving for t: t = log(A/P) / log(1 + r)
             return Math.log(target / currentSavings) / Math.log(1 + annualReturn);
+        }
+        
+        function calculateYearsToRetirementWithSavings(currentSavings, target, annualReturn, monthlyContribution) {
+            if (currentSavings >= target) return 0;
+            
+            if (monthlyContribution === 0) {
+                return calculateYearsToRetirement(currentSavings, target, annualReturn);
+            }
+            
+            // Future value of annuity with initial principal
+            // FV = P(1+r)^t + PMT * [((1+r)^t - 1) / r]
+            // Solving iteratively for t when FV = target
+            
+            const monthlyRate = annualReturn / 12;
+            let years = 0;
+            let currentValue = currentSavings;
+            
+            while (currentValue < target && years < 100) { // Safety limit
+                years += 0.1; // Check every 0.1 years
+                const months = years * 12;
+                currentValue = currentSavings * Math.pow(1 + monthlyRate, months);
+                if (monthlyContribution > 0) {
+                    currentValue += monthlyContribution * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate);
+                }
+            }
+            
+            return years;
+        }
+        
+        function populateRetirementDropdowns() {
+            const monthlyExpenses = calculateAverageMonthlyExpenses();
+            const monthlyIncome = calculateAverageMonthlyIncome();
+            const currentCashFlow = monthlyIncome - monthlyExpenses;
+            
+            // Populate target monthly expense dropdown (only if empty)
+            const targetExpenseSelect = document.getElementById('targetMonthlyExpense');
+            if (targetExpenseSelect && monthlyExpenses > 0 && targetExpenseSelect.children.length <= 1) {
+                const currentValue = targetExpenseSelect.value; // Preserve selection
+                targetExpenseSelect.innerHTML = '<option value="">בחר סכום</option>';
+                
+                const maxExpense = monthlyExpenses * 2;
+                for (let expense = 10000; expense <= maxExpense; expense += 5000) {
+                    const option = document.createElement('option');
+                    option.value = expense;
+                    option.textContent = `₪${expense.toLocaleString()}`;
+                    if (Math.abs(expense - monthlyExpenses) < 2500) {
+                        option.textContent += ' (נוכחי)';
+                        if (!currentValue) { // Only auto-select if no previous selection
+                            option.selected = true;
+                        }
+                    }
+                    targetExpenseSelect.appendChild(option);
+                }
+                
+                // Restore previous selection if it exists
+                if (currentValue) {
+                    targetExpenseSelect.value = currentValue;
+                }
+            }
+            
+            // Populate additional monthly saving dropdown (only if empty)
+            const savingSelect = document.getElementById('additionalMonthlySaving');
+            if (savingSelect && currentCashFlow > 0 && savingSelect.children.length <= 1) {
+                const currentValue = savingSelect.value; // Preserve selection
+                savingSelect.innerHTML = '<option value="0">₪0 (ללא חיסכון נוסף)</option>';
+                
+                const maxSaving = currentCashFlow * 5;
+                for (let saving = 500; saving <= maxSaving; saving += 500) {
+                    const option = document.createElement('option');
+                    option.value = saving;
+                    option.textContent = `₪${saving.toLocaleString()}`;
+                    if (saving <= currentCashFlow * 0.8) {
+                        option.textContent += ' (מומלץ)';
+                    }
+                    savingSelect.appendChild(option);
+                }
+                
+                // Restore previous selection if it exists
+                if (currentValue && currentValue !== "0") {
+                    savingSelect.value = currentValue;
+                }
+            }
+        }
+        
+        function analyzeSalaryIncome() {
+            // Use filtered data if date filter is active, otherwise use all data
+            const dataToAnalyze = dateFilterActive ? filteredData : pnlData;
+            
+            if (!dataToAnalyze || dataToAnalyze.length === 0) return { salary: 0, otherIncome: 0 };
+            
+            let totalSalary = 0;
+            let salaryTransactions = 0;
+            let totalOtherIncome = 0;
+            let otherIncomeTransactions = 0;
+            
+            // Group transactions by month to get monthly averages
+            const monthlyData = {};
+            
+            dataToAnalyze.forEach(transaction => {
+                if (transaction.amount > 0) { // Only positive amounts (income)
+                    const monthKey = transaction.date.getFullYear() + '-' + String(transaction.date.getMonth() + 1).padStart(2, '0');
+                    
+                    if (!monthlyData[monthKey]) {
+                        monthlyData[monthKey] = { salary: 0, otherIncome: 0 };
+                    }
+                    
+                    if (transaction.category === 'הכנסות עבודה') {
+                        monthlyData[monthKey].salary += transaction.amount;
+                        salaryTransactions++;
+                    } else {
+                        monthlyData[monthKey].otherIncome += transaction.amount;
+                        otherIncomeTransactions++;
+                    }
+                }
+            });
+            
+            // Calculate monthly averages
+            const months = Object.keys(monthlyData);
+            if (months.length === 0) return { salary: 0, otherIncome: 0, salaryTransactions: 0, otherIncomeTransactions: 0 };
+            
+            totalSalary = months.reduce((sum, month) => sum + monthlyData[month].salary, 0);
+            totalOtherIncome = months.reduce((sum, month) => sum + monthlyData[month].otherIncome, 0);
+            
+            const monthlySalary = totalSalary / months.length;
+            const monthlyOtherIncome = totalOtherIncome / months.length;
+            
+            return {
+                salary: monthlySalary,
+                otherIncome: monthlyOtherIncome,
+                salaryTransactions,
+                otherIncomeTransactions
+            };
+        }
+        
+        function calculateMandatorySavings(monthlySalary) {
+            if (monthlySalary <= 0) return { pension: 0, savingsInsurance: 0, studyFund: 0, total: 0 };
+            
+            // Israeli employment law percentages
+            const pension = monthlySalary * 0.12; // 12% (6% employee + 6% employer)
+            const savingsInsurance = monthlySalary * 0.10; // 10% (2.5% employee + 7.5% employer)  
+            const studyFund = monthlySalary * 0.10; // 10% (2.5% employee + 7.5% employer)
+            
+            return {
+                pension: Math.round(pension),
+                savingsInsurance: Math.round(savingsInsurance),
+                studyFund: Math.round(studyFund),
+                total: Math.round(pension + savingsInsurance + studyFund)
+            };
+        }
+
+        function displayCashFlowRecommendations(data) {
+            const recommendationsDiv = document.getElementById('retirementRecommendations');
+            
+            if (!data.monthlyIncome || data.monthlyIncome <= 0) {
+                recommendationsDiv.style.display = 'none';
+                return;
+            }
+            
+            // Preserve checkbox state before regenerating HTML
+            const existingCheckbox = document.getElementById('includeMandatorySavings');
+            const isCheckboxChecked = existingCheckbox ? existingCheckbox.checked : false;
+            const existingDropdownValue = document.getElementById('mandatorySavingsAmount')?.value || '';
+            
+            // Analyze salary vs other income
+            const salaryAnalysis = analyzeSalaryIncome();
+            const mandatorySavings = calculateMandatorySavings(salaryAnalysis.salary);
+            
+            const recommendedSaving = Math.max(data.currentCashFlow * 0.8, 1000);
+            const emergencyFundMin = data.monthlyIncome * 3;
+            const emergencyFundMax = data.monthlyIncome * 6;
+            
+            let content = '<h4 style="color: #2e7d32; margin-bottom: 15px;">💡 המלצות פיננסיות</h4>';
+            
+            // Add salary income analysis if salary data exists
+            if (salaryAnalysis.salary > 0) {
+                content += `
+                    <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 15px;">
+                        <h5 style="color: #1976d2; margin-bottom: 10px;">💼 ניתוח הכנסות עבודה</h5>
+                        <div style="margin-bottom: 8px;">
+                            <strong>משכורת ממוצעת:</strong> ₪${Math.round(salaryAnalysis.salary).toLocaleString()}
+                            <small style="color: #666;"> (${salaryAnalysis.salaryTransactions} תנועות)</small>
+                        </div>
+                        ${salaryAnalysis.otherIncome > 0 ? `
+                            <div style="margin-bottom: 15px;">
+                                <strong>הכנסות אחרות:</strong> ₪${Math.round(salaryAnalysis.otherIncome).toLocaleString()}
+                                <small style="color: #666;"> (${salaryAnalysis.otherIncomeTransactions} תנועות)</small>
+                            </div>
+                        ` : ''}
+                        
+                        <div style="border-top: 1px solid #bbdefb; padding-top: 10px; margin-top: 10px;">
+                            <div style="margin-bottom: 10px;">
+                                <strong style="color: #1976d2;">📊 הפרשות חיסכון לפי חוק:</strong>
+                            </div>
+                            
+                            <div style="margin-bottom: 15px; padding: 10px; background: rgba(25, 118, 210, 0.05); border-radius: 5px;">
+                                <label style="display: flex; align-items: center; margin-bottom: 10px; cursor: pointer;">
+                                    <input type="checkbox" id="includeMandatorySavings" 
+                                           onchange="updateMandatorySavingsSelection()" 
+                                           onclick="console.log('Checkbox clicked, new state:', this.checked)"
+                                           ${isCheckboxChecked ? 'checked' : ''}
+                                           style="margin-left: 8px; transform: scale(1.2);">
+                                    <span style="font-weight: 600;">כלול בחיסכון החודשי הנוסף</span>
+                                </label>
+                                
+                                <div id="mandatorySavingsControls" style="margin-top: 10px; display: none;">
+                                    <label style="display: block; margin-bottom: 5px; font-weight: 600;">סכום חיסכון:</label>
+                                    <select id="mandatorySavingsAmount" onchange="updateMandatorySavingsSelection()" 
+                                            style="padding: 8px; border: 1px solid #ddd; border-radius: 5px; width: 200px;">
+                                        <!-- Options will be populated dynamically -->
+                                    </select>
+                                </div>
+                                
+                                <div id="mandatorySavingsImpact" style="margin-top: 10px; display: none;">
+                                    <!-- Impact message will be displayed here -->
+                                </div>
+                            </div>
+                            
+                            <div style="margin-left: 15px; font-size: 14px;">
+                                <div style="margin-bottom: 5px; color: #666;">פירוט הפרשות:</div>
+                                • <strong>פנסיה (12%):</strong> ₪${mandatorySavings.pension.toLocaleString()}<br>
+                                • <strong>ביטוח חיסכון (10%):</strong> ₪${mandatorySavings.savingsInsurance.toLocaleString()}<br>
+                                • <strong>קרן השתלמות (10%):</strong> ₪${mandatorySavings.studyFund.toLocaleString()}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            if (data.currentCashFlow > 0) {
+                content += `
+                    <div style="margin-bottom: 10px;">
+                        <strong>💰 תזרים חופשי חודשי:</strong> ₪${Math.round(data.currentCashFlow).toLocaleString()}
+                    </div>
+                    <div style="margin-bottom: 10px;">
+                        <strong>📈 חיסכון מומלץ:</strong> ₪${Math.round(recommendedSaving).toLocaleString()} לחודש 
+                        (${((recommendedSaving / data.monthlyIncome) * 100).toFixed(1)}% מההכנסה)
+                    </div>
+                `;
+            } else {
+                content += `
+                    <div style="margin-bottom: 10px; color: #d32f2f;">
+                        <strong>⚠️ גירעון חודשי:</strong> ₪${Math.round(Math.abs(data.currentCashFlow)).toLocaleString()}
+                        <br>מומלץ לבחון צמצום הוצאות או הגדלת הכנסות
+                    </div>
+                `;
+            }
+            
+            content += `
+                <div style="margin-bottom: 10px;">
+                    <strong>🚨 קרן חירום מומלצת:</strong> ₪${Math.round(emergencyFundMin).toLocaleString()} - ₪${Math.round(emergencyFundMax).toLocaleString()}
+                    <br><small style="color: #666;">3-6 חודשי הכנסה לכיסוי מצבי חירום</small>
+                </div>
+            `;
+            
+            if (data.additionalMonthlySaving > 0) {
+                // Calculate retirement timeline without additional savings
+                const age = parseInt(document.getElementById('currentAge').value);
+                const savings = parseInt(document.getElementById('currentSavings').value);
+                const annualReturn = parseFloat(document.getElementById('annualReturn').value);
+                const targetMonthlyExpense = parseInt(document.getElementById('targetMonthlyExpense').value) || data.monthlyExpenses;
+                const retirementTarget = targetMonthlyExpense * 12 * 25;
+                
+                const yearsWithoutAdditional = calculateYearsToRetirement(savings, retirementTarget, annualReturn);
+                const yearsWithAdditional = calculateYearsToRetirementWithSavings(savings, retirementTarget, annualReturn, data.totalMonthlySaving || data.additionalMonthlySaving);
+                
+                const timeSaved = yearsWithoutAdditional - yearsWithAdditional;
+                const monthsSaved = Math.round(timeSaved * 12);
+                const yearsSaved = Math.floor(timeSaved);
+                const remainingMonths = monthsSaved - (yearsSaved * 12);
+                
+                let timeSavedText = '';
+                if (yearsSaved > 0 && remainingMonths > 0) {
+                    timeSavedText = `${yearsSaved} שנים ו-${remainingMonths} חודשים`;
+                } else if (yearsSaved > 0) {
+                    timeSavedText = `${yearsSaved} שנים`;
+                } else if (monthsSaved > 0) {
+                    timeSavedText = `${monthsSaved} חודשים`;
+                } else {
+                    timeSavedText = 'פחות מחודש';
+                }
+                
+                content += `
+                    <div style="margin-top: 15px; padding: 10px; background: rgba(76, 175, 80, 0.1); border-radius: 5px;">
+                        <strong>✅ חיסכון נוסף נבחר:</strong> ₪${data.additionalMonthlySaving.toLocaleString()} לחודש
+                        <br><small style="color: #2e7d32; font-weight: 600;">
+                            🚀 זה יקדם את מועד הפרישה שלך ב-${timeSavedText} קדימה!
+                        </small>
+                    </div>
+                `;
+            }
+            
+            recommendationsDiv.innerHTML = content;
+            recommendationsDiv.style.display = 'block';
+            
+            // Populate mandatory savings dropdown if salary data exists
+            if (salaryAnalysis.salary > 0) {
+                populateMandatorySavingsDropdown(mandatorySavings.total);
+                
+                // Restore checkbox state and controls visibility
+                const newCheckbox = document.getElementById('includeMandatorySavings');
+                const newControls = document.getElementById('mandatorySavingsControls');
+                const newDropdown = document.getElementById('mandatorySavingsAmount');
+                const newImpactDiv = document.getElementById('mandatorySavingsImpact');
+                
+                if (newCheckbox && isCheckboxChecked) {
+                    newCheckbox.checked = true;
+                    if (newControls) {
+                        newControls.style.display = 'block';
+                    }
+                    if (newDropdown && existingDropdownValue) {
+                        newDropdown.value = existingDropdownValue;
+                    }
+                    if (newImpactDiv && newDropdown && newDropdown.value) {
+                        displayMandatorySavingsImpact();
+                        newImpactDiv.style.display = 'block';
+                    }
+                }
+            }
+        }
+        
+        function populateMandatorySavingsDropdown(totalMandatory) {
+            const dropdown = document.getElementById('mandatorySavingsAmount');
+            if (!dropdown || totalMandatory <= 0) return;
+            
+            // Store current selection
+            const currentValue = dropdown.value;
+            
+            dropdown.innerHTML = '';
+            
+            // Create options from total amount down to 1000 in 1000 increments
+            for (let amount = totalMandatory; amount >= 1000; amount -= 1000) {
+                const option = document.createElement('option');
+                option.value = amount;
+                if (amount === totalMandatory) {
+                    option.textContent = `₪${amount.toLocaleString()} (מלא - מומלץ)`;
+                    option.selected = true;
+                } else if (amount === 1000) {
+                    option.textContent = `₪${amount.toLocaleString()} (מינימום)`;
+                } else {
+                    option.textContent = `₪${amount.toLocaleString()}`;
+                }
+                dropdown.appendChild(option);
+            }
+            
+            // Restore previous selection if it exists
+            if (currentValue && dropdown.querySelector(`option[value="${currentValue}"]`)) {
+                dropdown.value = currentValue;
+            } else {
+                // Default to the full amount (first option)
+                dropdown.value = totalMandatory;
+            }
+            
+            // Note: Don't trigger change event here to avoid infinite loop
+            // The UI will update when user interacts with controls
+        }
+        
+        function updateMandatorySavingsSelection() {
+            const checkbox = document.getElementById('includeMandatorySavings');
+            const dropdown = document.getElementById('mandatorySavingsAmount');
+            const controls = document.getElementById('mandatorySavingsControls');
+            const impactDiv = document.getElementById('mandatorySavingsImpact');
+            
+            if (!checkbox || !dropdown || !controls || !impactDiv) {
+                console.log('Missing mandatory savings elements:', {
+                    checkbox: !!checkbox,
+                    dropdown: !!dropdown, 
+                    controls: !!controls,
+                    impactDiv: !!impactDiv
+                });
+                return;
+            }
+            
+            console.log('Checkbox state:', checkbox.checked);
+            
+            // Show/hide dropdown based on checkbox
+            controls.style.display = checkbox.checked ? 'block' : 'none';
+            
+            // Display impact message if checkbox is checked and dropdown has value
+            if (checkbox.checked && dropdown.value) {
+                displayMandatorySavingsImpact();
+                impactDiv.style.display = 'block';
+            } else {
+                impactDiv.style.display = 'none';
+            }
+            
+            // Update the additional monthly savings calculation (but prevent recursive calls)
+            updateAdditionalMonthlySavingsWithMandatory();
+            
+            // Recalculate retirement metrics (but prevent recursive calls)
+            setTimeout(() => {
+                calculateRetirementMetrics();
+            }, 0);
+        }
+        
+        function displayMandatorySavingsImpact() {
+            const mandatoryAmount = parseInt(document.getElementById('mandatorySavingsAmount')?.value || 0);
+            const impactDiv = document.getElementById('mandatorySavingsImpact');
+            
+            if (!impactDiv || mandatoryAmount <= 0) {
+                if (impactDiv) impactDiv.style.display = 'none';
+                return;
+            }
+            
+            // Get current retirement calculation values
+            const age = parseInt(document.getElementById('currentAge')?.value || 0);
+            const savings = parseInt(document.getElementById('currentSavings')?.value || 0);
+            const annualReturn = parseFloat(document.getElementById('annualReturn')?.value || 0.04);
+            const targetMonthlyExpense = parseInt(document.getElementById('targetMonthlyExpense')?.value || 0) || calculateAverageMonthlyExpenses();
+            const retirementTarget = targetMonthlyExpense * 12 * 25;
+            const additionalSavings = parseInt(document.getElementById('additionalMonthlySaving')?.value || 0);
+            
+            if (!age || !savings || !targetMonthlyExpense) {
+                impactDiv.style.display = 'none';
+                return;
+            }
+            
+            try {
+                // Calculate years to retirement without mandatory savings
+                const yearsWithoutMandatory = calculateYearsToRetirementWithSavings(savings, retirementTarget, annualReturn, additionalSavings);
+                // Calculate years to retirement with mandatory savings
+                const yearsWithMandatory = calculateYearsToRetirementWithSavings(savings, retirementTarget, annualReturn, additionalSavings + mandatoryAmount);
+                
+                const timeSaved = yearsWithoutMandatory - yearsWithMandatory;
+                
+                if (timeSaved <= 0) {
+                    impactDiv.style.display = 'none';
+                    return;
+                }
+                
+                const monthsSaved = Math.round(timeSaved * 12);
+                const yearsSaved = Math.floor(timeSaved);
+                const remainingMonths = monthsSaved - (yearsSaved * 12);
+                
+                let timeSavedText = '';
+                if (yearsSaved > 0 && remainingMonths > 0) {
+                    timeSavedText = `${yearsSaved} שנים ו-${remainingMonths} חודשים`;
+                } else if (yearsSaved > 0) {
+                    timeSavedText = `${yearsSaved} שנים`;
+                } else if (monthsSaved > 0) {
+                    timeSavedText = `${monthsSaved} חודשים`;
+                } else {
+                    timeSavedText = 'פחות מחודש';
+                }
+                
+                impactDiv.innerHTML = `
+                    <div style="padding: 8px; background: rgba(76, 175, 80, 0.1); border-radius: 5px; border-left: 3px solid #4caf50;">
+                        <small style="color: #2e7d32; font-weight: 600;">
+                            🚀 זה יקדם את מועד הפרישה שלך ב-${timeSavedText} קדימה!
+                        </small>
+                    </div>
+                `;
+                impactDiv.style.display = 'block';
+            } catch (error) {
+                console.error('Error calculating mandatory savings impact:', error);
+                impactDiv.style.display = 'none';
+            }
+        }
+        
+        function updateAdditionalMonthlySavingsWithMandatory() {
+            const checkbox = document.getElementById('includeMandatorySavings');
+            const mandatoryAmount = parseInt(document.getElementById('mandatorySavingsAmount')?.value || 0);
+            const additionalSavings = parseInt(document.getElementById('additionalMonthlySaving')?.value || 0);
+            
+            // If mandatory savings is included, add it to additional savings for calculations
+            if (checkbox && checkbox.checked && mandatoryAmount > 0) {
+                // Store the total in a hidden way for calculations
+                window.totalMonthlySavings = additionalSavings + mandatoryAmount;
+            } else {
+                window.totalMonthlySavings = additionalSavings;
+            }
         }
         
         function getBenchmarkForAge(age) {
@@ -2720,16 +3236,29 @@
                     <div class="result-value">₪${Math.round(data.monthlyIncome).toLocaleString()}</div>
                 </div>
                 <div class="result-card">
-                    <div class="result-label">הוצאות חודשיות ממוצעות</div>
+                    <div class="result-label">הוצאות חודשיות נוכחיות</div>
                     <div class="result-value">₪${Math.round(data.monthlyExpenses).toLocaleString()}</div>
+                </div>
+                <div class="result-card">
+                    <div class="result-label">הוצאות מתוכננות לפרישה</div>
+                    <div class="result-value">₪${Math.round(data.targetMonthlyExpense).toLocaleString()}</div>
+                    ${data.targetMonthlyExpense !== data.monthlyExpenses ? 
+                        `<div class="result-label" style="font-size: 12px; color: #666;">שונה מההוצאות הנוכחיות</div>` : ''}
                 </div>
                 <div class="result-card">
                     <div class="result-label">יעד לפרישה</div>
                     <div class="result-value">₪${Math.round(data.retirementTarget).toLocaleString()}</div>
                     <div class="result-label" style="font-size: 12px; margin-top: 8px; color: #666;">
-                        חישוב: ₪${Math.round(data.monthlyExpenses).toLocaleString()} × 12 חודשים × 25 שנים<br>
+                        חישוב: ₪${Math.round(data.targetMonthlyExpense).toLocaleString()} × 12 חודשים × 25 שנים<br>
                         (בהנחת משיכה שנתית של 4% מהחיסכון)
                     </div>
+                </div>
+                <div class="result-card">
+                    <div class="result-label">חיסכון חודשי נוסף</div>
+                    <div class="result-value">₪${data.additionalMonthlySaving.toLocaleString()}</div>
+                    ${data.additionalMonthlySaving > 0 ? 
+                        `<div class="result-label" style="font-size: 12px; color: #2e7d32;">מקדם את הפרישה</div>` : 
+                        `<div class="result-label" style="font-size: 12px; color: #666;">ללא חיסכון נוסף</div>`}
                 </div>
                 <div class="result-card">
                     <div class="result-label">גיל פרישה צפוי</div>
@@ -2941,6 +3470,7 @@
             const age = parseInt(document.getElementById('currentAge').value);
             const currentSavings = parseInt(document.getElementById('currentSavings').value);
             const annualReturn = parseFloat(document.getElementById('annualReturn').value);
+            const additionalMonthlySaving = data.totalMonthlySaving || data.additionalMonthlySaving || 0;
             
             // Destroy existing chart if it exists
             if (charts.savingsGrowthChart) {
@@ -2953,9 +3483,17 @@
             const savingsData = [];
             const targetLine = [];
             
+            const monthlyRate = annualReturn / 12;
+            
             for (let currentAge = age; currentAge <= maxAge; currentAge += 5) {
                 const yearsFromNow = currentAge - age;
-                const futureValue = currentSavings * Math.pow(1 + annualReturn, yearsFromNow);
+                const months = yearsFromNow * 12;
+                
+                // Calculate future value with compound interest and monthly contributions
+                let futureValue = currentSavings * Math.pow(1 + monthlyRate, months);
+                if (additionalMonthlySaving > 0 && months > 0) {
+                    futureValue += additionalMonthlySaving * ((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate);
+                }
                 
                 years.push(`גיל ${currentAge}`);
                 savingsData.push(Math.round(futureValue));
@@ -2991,7 +3529,7 @@
                     plugins: {
                         title: {
                             display: true,
-                            text: `צמיחת חסכונות עם תשואה שנתית של ${(annualReturn * 100).toFixed(0)}%`,
+                            text: `צמיחת חסכונות עם תשואה שנתית של ${(annualReturn * 100).toFixed(0)}%${additionalMonthlySaving > 0 ? ` + ₪${additionalMonthlySaving.toLocaleString()} חיסכון חודשי` : ''}`,
                             font: {
                                 size: 16,
                                 weight: 'bold'
