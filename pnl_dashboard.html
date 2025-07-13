@@ -2725,20 +2725,51 @@
         function calculateYearsToRetirementWithSavings(currentSavings, target, annualReturn, monthlyContribution) {
             if (currentSavings >= target) return 0;
             
-            if (monthlyContribution === 0) {
+            if (monthlyContribution === 0 || monthlyContribution === undefined || monthlyContribution === null) {
                 return calculateYearsToRetirement(currentSavings, target, annualReturn);
             }
             
-            // Future value of annuity with initial principal
-            // FV = P(1+r)^t + PMT * [((1+r)^t - 1) / r]
-            // Solving iteratively for t when FV = target
+            const monthlyRate = annualReturn / 12;
             
+            if (monthlyRate === 0) {
+                // Special case: no interest
+                return (target - currentSavings) / monthlyContribution / 12;
+            }
+            
+            // Analytical solution for future value of annuity with principal
+            // FV = PV(1+r)^n + PMT * [((1+r)^n - 1) / r]
+            // Solving for n: n = ln((FV * r + PMT) / (PV * r + PMT)) / ln(1 + r)
+            
+            const numerator = target * monthlyRate + monthlyContribution;
+            const denominator = currentSavings * monthlyRate + monthlyContribution;
+            
+            if (denominator <= 0) {
+                // Fallback to iterative method for edge cases
+                return calculateYearsToRetirementIterative(currentSavings, target, annualReturn, monthlyContribution);
+            }
+            
+            const months = Math.log(numerator / denominator) / Math.log(1 + monthlyRate);
+            const years = months / 12;
+            
+            // Validate result is reasonable
+            if (years < 0 || years > 100 || !isFinite(years)) {
+                console.warn('Analytical calculation failed, using iterative method', {
+                    currentSavings, target, annualReturn, monthlyContribution, years
+                });
+                return calculateYearsToRetirementIterative(currentSavings, target, annualReturn, monthlyContribution);
+            }
+            
+            return years;
+        }
+        
+        function calculateYearsToRetirementIterative(currentSavings, target, annualReturn, monthlyContribution) {
+            // Fallback iterative method for edge cases
             const monthlyRate = annualReturn / 12;
             let years = 0;
             let currentValue = currentSavings;
             
             while (currentValue < target && years < 100) { // Safety limit
-                years += 0.1; // Check every 0.1 years
+                years += 0.01; // More precise increments
                 const months = years * 12;
                 currentValue = currentSavings * Math.pow(1 + monthlyRate, months);
                 if (monthlyContribution > 0) {
@@ -2924,7 +2955,7 @@
                                     <span style="font-weight: 600;">כלול בחיסכון החודשי הנוסף</span>
                                 </label>
                                 
-                                <div id="mandatorySavingsControls" style="margin-top: 10px; display: none;">
+                                <div id="mandatorySavingsControls" style="margin-top: 10px; display: block;">
                                     <label style="display: block; margin-bottom: 5px; font-weight: 600;">סכום חיסכון:</label>
                                     <select id="mandatorySavingsAmount" onchange="updateMandatorySavingsSelection()" 
                                             style="padding: 8px; border: 1px solid #ddd; border-radius: 5px; width: 200px;">
@@ -2985,18 +3016,27 @@
                 const yearsWithoutAdditional = calculateYearsToRetirement(savings, retirementTarget, annualReturn);
                 const yearsWithAdditional = calculateYearsToRetirementWithSavings(savings, retirementTarget, annualReturn, data.totalMonthlySaving || data.additionalMonthlySaving);
                 
+                console.log('Additional savings impact calculation:', {
+                    savings,
+                    retirementTarget,
+                    annualReturn,
+                    additionalMonthlySaving: data.totalMonthlySaving || data.additionalMonthlySaving,
+                    yearsWithoutAdditional: yearsWithoutAdditional.toFixed(2),
+                    yearsWithAdditional: yearsWithAdditional.toFixed(2)
+                });
+                
                 const timeSaved = yearsWithoutAdditional - yearsWithAdditional;
-                const monthsSaved = Math.round(timeSaved * 12);
-                const yearsSaved = Math.floor(timeSaved);
-                const remainingMonths = monthsSaved - (yearsSaved * 12);
+                const totalMonthsSaved = Math.round(timeSaved * 12);
+                const yearsSaved = Math.floor(totalMonthsSaved / 12);
+                const remainingMonths = totalMonthsSaved % 12;
                 
                 let timeSavedText = '';
                 if (yearsSaved > 0 && remainingMonths > 0) {
                     timeSavedText = `${yearsSaved} שנים ו-${remainingMonths} חודשים`;
                 } else if (yearsSaved > 0) {
                     timeSavedText = `${yearsSaved} שנים`;
-                } else if (monthsSaved > 0) {
-                    timeSavedText = `${monthsSaved} חודשים`;
+                } else if (totalMonthsSaved > 0) {
+                    timeSavedText = `${totalMonthsSaved} חודשים`;
                 } else {
                     timeSavedText = 'פחות מחודש';
                 }
@@ -3024,14 +3064,17 @@
                 const newDropdown = document.getElementById('mandatorySavingsAmount');
                 const newImpactDiv = document.getElementById('mandatorySavingsImpact');
                 
+                // Always show controls and restore dropdown value
+                if (newControls) {
+                    newControls.style.display = 'block';
+                }
+                if (newDropdown && existingDropdownValue) {
+                    newDropdown.value = existingDropdownValue;
+                }
+                
+                // Restore checkbox state and impact message if applicable
                 if (newCheckbox && isCheckboxChecked) {
                     newCheckbox.checked = true;
-                    if (newControls) {
-                        newControls.style.display = 'block';
-                    }
-                    if (newDropdown && existingDropdownValue) {
-                        newDropdown.value = existingDropdownValue;
-                    }
                     if (newImpactDiv && newDropdown && newDropdown.value) {
                         displayMandatorySavingsImpact();
                         newImpactDiv.style.display = 'block';
@@ -3094,8 +3137,8 @@
             
             console.log('Checkbox state:', checkbox.checked);
             
-            // Show/hide dropdown based on checkbox
-            controls.style.display = checkbox.checked ? 'block' : 'none';
+            // Always keep dropdown visible - don't hide it based on checkbox
+            controls.style.display = 'block';
             
             // Display impact message if checkbox is checked and dropdown has value
             if (checkbox.checked && dropdown.value) {
@@ -3142,6 +3185,16 @@
                 // Calculate years to retirement with mandatory savings
                 const yearsWithMandatory = calculateYearsToRetirementWithSavings(savings, retirementTarget, annualReturn, additionalSavings + mandatoryAmount);
                 
+                console.log('Mandatory savings impact calculation:', {
+                    savings,
+                    retirementTarget,
+                    annualReturn,
+                    additionalSavings,
+                    mandatoryAmount,
+                    yearsWithoutMandatory: yearsWithoutMandatory.toFixed(2),
+                    yearsWithMandatory: yearsWithMandatory.toFixed(2)
+                });
+                
                 const timeSaved = yearsWithoutMandatory - yearsWithMandatory;
                 
                 if (timeSaved <= 0) {
@@ -3149,17 +3202,17 @@
                     return;
                 }
                 
-                const monthsSaved = Math.round(timeSaved * 12);
-                const yearsSaved = Math.floor(timeSaved);
-                const remainingMonths = monthsSaved - (yearsSaved * 12);
+                const totalMonthsSaved = Math.round(timeSaved * 12);
+                const yearsSaved = Math.floor(totalMonthsSaved / 12);
+                const remainingMonths = totalMonthsSaved % 12;
                 
                 let timeSavedText = '';
                 if (yearsSaved > 0 && remainingMonths > 0) {
                     timeSavedText = `${yearsSaved} שנים ו-${remainingMonths} חודשים`;
                 } else if (yearsSaved > 0) {
                     timeSavedText = `${yearsSaved} שנים`;
-                } else if (monthsSaved > 0) {
-                    timeSavedText = `${monthsSaved} חודשים`;
+                } else if (totalMonthsSaved > 0) {
+                    timeSavedText = `${totalMonthsSaved} חודשים`;
                 } else {
                     timeSavedText = 'פחות מחודש';
                 }
