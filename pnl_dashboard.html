@@ -463,16 +463,17 @@
         
         <div class="upload-section" id="uploadSection">
             <h3>העלאת קובץ נתונים</h3>
-            <p>גרור קובץ PDF או CSV לכאן או לחץ לבחירת קובץ</p>
+            <p>גרור קובץ PDF, XLS או CSV לכאן או לחץ לבחירת קובץ</p>
             <div style="margin: 15px 0; font-size: 14px; color: #666;">
                 <strong>פורמטים נתמכים:</strong><br>
                 • <strong>PDF:</strong> דוחות בנק לאומי (עיבוד אוטומטי)<br>
+                • <strong>XLS:</strong> דוחות בנק לאומי (עיבוד אוטומטי)<br>
                 • <strong>CSV:</strong> פורמט בנק V1/V2 או פורמט סטנדרטי<br>
                 • עיבוד מתוח באמצעות שרת Python מקומי
             </div>
-            <input type="file" id="dataFile" class="upload-input" accept=".csv,.pdf" />
+            <input type="file" id="dataFile" class="upload-input" accept=".csv,.pdf,.xls" />
             <button class="upload-button" onclick="document.getElementById('dataFile').click()">
-                בחר קובץ PDF או CSV
+                בחר קובץ PDF, CSV או XLS
             </button>
             <div class="file-info" id="fileInfo"></div>
             <div class="error-message" id="errorMessage"></div>
@@ -663,30 +664,31 @@
             const fileName = file.name.toLowerCase();
             const isPDF = fileName.endsWith('.pdf');
             const isCSV = fileName.endsWith('.csv');
+            const isXLS = fileName.endsWith('.xls');
             
-            if (!isPDF && !isCSV) {
-                showError('אנא בחר קובץ PDF או CSV בלבד');
+            if (!isPDF && !isCSV && !isXLS) {
+                showError('אנא בחר קובץ PDF, CSV או XLS בלבד');
                 return;
             }
             
             // Show file info
-            const fileType = isPDF ? 'PDF' : 'CSV';
+            const fileType = isPDF ? 'PDF' : (isCSV ? 'CSV' : 'XLS');
             fileInfo.innerHTML = `קובץ ${fileType} נבחר: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`;
             fileInfo.style.display = 'block';
             
             // Show loading
             loading.style.display = 'block';
             
-            if (isPDF) {
-                // Handle PDF upload via server
-                await handlePDFUpload(file);
+            if (isPDF || isXLS) {
+                // Handle PDF/XLS upload via server
+                await handleServerUpload(file);
             } else {
                 // Handle CSV upload (client-side processing)
                 handleCSVUpload(file);
             }
         }
         
-        async function handlePDFUpload(file) {
+        async function handleServerUpload(file) {
             const loading = document.getElementById('loading');
             
             try {
@@ -695,7 +697,7 @@
                 formData.append('file', file);
                 
                 // Update loading message
-                loading.querySelector('p').textContent = 'מעבד קובץ PDF...';
+                loading.querySelector('p').textContent = 'מעבד קובץ...';
                 
                 // Send to server
                 const response = await fetch('http://localhost:5001/upload-pdf', {

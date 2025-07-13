@@ -18,13 +18,14 @@ except ImportError:
     exit(1)
 
 from pdf2csv import BankLeumiPDFParser
+from xls2csv import BankLeumiXLSParser
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for cross-origin requests
 
 # Configuration
 UPLOAD_FOLDER = tempfile.gettempdir()
-ALLOWED_EXTENSIONS = {'pdf', 'csv'}
+ALLOWED_EXTENSIONS = {'pdf', 'csv', 'xls'}
 MAX_FILE_SIZE = 16 * 1024 * 1024  # 16MB max file size
 
 def allowed_file(filename):
@@ -55,7 +56,7 @@ def upload_pdf():
         
         # Validate file
         if not allowed_file(file.filename):
-            return jsonify({'error': 'File type not supported. Please upload PDF or CSV files only.'}), 400
+            return jsonify({'error': 'File type not supported. Please upload PDF, CSV, or XLS files only.'}), 400
         
         # Check file size
         file.seek(0, 2)  # Seek to end
@@ -127,6 +128,59 @@ def upload_pdf():
                     'csv_data': csv_content,
                     'transaction_count': len(transactions),
                     'message': f'Successfully processed {len(transactions)} transactions from PDF'
+                })
+                
+            elif file_ext == 'xls':
+                # Process XLS file
+                parser = BankLeumiXLSParser()
+                
+                # Extract HTML from XLS file
+                html_content = parser.extract_html_from_xls(file_path)
+                
+                if not html_content.strip():
+                    return jsonify({'error': 'No content could be extracted from the XLS. Please ensure it\'s a valid Bank Leumi XLS file.'}), 400
+                
+                # Parse transactions
+                transactions = parser.parse_transactions(html_content)
+                
+                if not transactions:
+                    return jsonify({'error': 'No transactions found in the XLS. Please check the file format.'}), 400
+                
+                # Sort transactions by date
+                transactions.sort(key=lambda x: x['date'])
+                
+                # Convert to CSV format using proper CSV writer
+                import io
+                import csv as csv_module
+                
+                output = io.StringIO()
+                csv_writer = csv_module.writer(output, quoting=csv_module.QUOTE_MINIMAL)
+                
+                # Write header
+                csv_writer.writerow(["Date", "Description", "Amount", "Balance"])
+                
+                # Write transactions with proper escaping and rounding
+                for transaction in transactions:
+                    csv_writer.writerow([
+                        transaction['date'].strftime('%Y-%m-%d'),
+                        transaction['description'],
+                        round(transaction['amount'], 2),
+                        round(transaction['balance'], 2)
+                    ])
+                
+                csv_content = output.getvalue()
+                output.close()
+                
+                # Debug: Print first few lines of generated CSV
+                print("=== Generated CSV Content from XLS (first 500 chars) ===")
+                print(csv_content[:500])
+                print("=== End CSV Debug ===")
+                
+                return jsonify({
+                    'success': True,
+                    'csv_data': csv_content,
+                    'transaction_count': len(transactions),
+                    'message': f'Successfully processed {len(transactions)} transactions from XLS'
                 })
                 
             elif file_ext == 'csv':

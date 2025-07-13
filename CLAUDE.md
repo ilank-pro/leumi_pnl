@@ -9,14 +9,16 @@ This is a P&L (Profit & Loss) analysis dashboard project for Bank Leumi financia
 ## Architecture
 
 ### Core Components
-- **Flask Server** (`server.py`): Handles PDF upload, processing, and serves the dashboard
+- **Flask Server** (`server.py`): Handles PDF/XLS upload, processing, and serves the dashboard
 - **PDF Parser** (`pdf2csv.py`): Converts Bank Leumi PDF statements to CSV format
-- **Interactive Dashboard** (`pnl_dashboard.html`): Main web interface with CSV/PDF upload
+- **XLS Parser** (`xls2csv.py`): Converts Bank Leumi XLS statements (HTML format) to CSV format
+- **Interactive Dashboard** (`pnl_dashboard.html`): Main web interface with CSV/PDF/XLS upload
 - **Static Dashboard** (`bank_leumi_analysis.html`): Reference dashboard with hardcoded data
 
 ### Technology Stack
 - **Backend**: Flask with CORS support for file uploads
 - **PDF Processing**: pdfplumber for text extraction with Hebrew RTL support
+- **XLS Processing**: BeautifulSoup4 and lxml for HTML table parsing
 - **Frontend**: Vanilla JavaScript with Chart.js for visualization
 - **Styling**: CSS Grid with responsive design and RTL Hebrew support
 - **Data Processing**: Client-side CSV parsing with smart transaction classification
@@ -56,6 +58,15 @@ python pdf2csv.py input.pdf output.csv
 python pdf2csv.py input.pdf output.csv --verbose
 ```
 
+### XLS Processing (Standalone)
+```bash
+# Convert XLS to CSV directly
+python xls2csv.py input.xls output.csv
+
+# With verbose debugging
+python xls2csv.py input.xls output.csv --verbose
+```
+
 ## Data Flow Architecture
 
 ### PDF Processing Pipeline
@@ -65,6 +76,15 @@ python pdf2csv.py input.pdf output.csv --verbose
 4. **Transaction Parsing**: Regex patterns extract transactions (balance amount reference description date date)
 5. **CSV Generation**: Proper CSV escaping with UTF-8 encoding
 6. **Response**: JSON with CSV data and transaction count
+
+### XLS Processing Pipeline
+1. **Upload**: XLS file uploaded via `/upload-pdf` endpoint
+2. **Validation**: File type and Bank Leumi format validation
+3. **HTML Extraction**: Read HTML content from XLS file
+4. **Table Parsing**: BeautifulSoup extracts Hebrew transaction table with columns (תאריך, תיאור, בחובה, בזכות, היתרה)
+5. **Amount Calculation**: Convert Debit/Credit columns to signed amounts
+6. **CSV Generation**: Proper CSV escaping with UTF-8 encoding and YYYY-MM-DD dates
+7. **Response**: JSON with CSV data and transaction count
 
 ### CSV Processing Pipeline
 1. **Client Upload**: FileReader processes CSV with UTF-8 encoding
@@ -90,10 +110,13 @@ python pdf2csv.py input.pdf output.csv --verbose
 
 ### File Processing Support
 ```javascript
-// Supported CSV formats
-Bank V1: Date,Description,Amount,Balance (DD/MM/YY)
-Bank V2: Date,Description,Amount,Balance (YYYY-MM-DD) 
-Standard: Date,Description,Amount,Category,Type
+// Supported file formats
+PDF: Bank Leumi PDF statements with Hebrew text extraction
+XLS: Bank Leumi XLS statements (HTML format) with table parsing
+CSV formats:
+  Bank V1: Date,Description,Amount,Balance (DD/MM/YY)
+  Bank V2: Date,Description,Amount,Balance (YYYY-MM-DD) 
+  Standard: Date,Description,Amount,Category,Type
 ```
 
 ## Code Organization
@@ -104,6 +127,7 @@ Standard: Date,Description,Amount,Category,Type
 - **`populateDateFilters()`**: Builds month selection dropdowns from data
 - **`applyDateFilter()`** / **`resetDateFilter()`**: Filter management
 - **`BankLeumiPDFParser.parse_transactions()`**: PDF transaction extraction
+- **`BankLeumiXLSParser.parse_transactions()`**: XLS HTML table parsing and transaction extraction
 
 ### Global State Management
 ```javascript
@@ -128,11 +152,11 @@ let dateFilterActive = false; // Whether filtering is active
 
 ### Flask Routes
 - `GET /`: Serves main dashboard (`pnl_dashboard.html`)
-- `POST /upload-pdf`: Handles PDF/CSV file uploads
+- `POST /upload-pdf`: Handles PDF/CSV/XLS file uploads
 - `GET /health`: Server health check endpoint
 
 ### File Upload Handling
-- **Allowed formats**: PDF, CSV
+- **Allowed formats**: PDF, CSV, XLS
 - **Size limit**: 16MB maximum
 - **Processing**: Temporary file storage with UUID naming
 - **Error handling**: Comprehensive validation and cleanup
@@ -144,6 +168,8 @@ let dateFilterActive = false; // Whether filtering is active
 - `flask-cors>=4.0.0`: Cross-origin request handling  
 - `pdfplumber>=0.11.0`: PDF text extraction
 - `pandas>=2.0.0`: Data manipulation utilities
+- `beautifulsoup4>=4.12.0`: HTML parsing for XLS files
+- `lxml>=4.9.0`: XML/HTML parsing backend
 
 ### JavaScript (CDN)
 - Chart.js 3.9.1: Data visualization library
