@@ -10,10 +10,11 @@ This is a P&L (Profit & Loss) analysis dashboard project for Bank Leumi financia
 
 ### Core Components
 - **Flask Server** (`server.py`): Handles PDF/XLS upload, processing, and serves the dashboard
-- **PDF Parser** (`pdf2csv.py`): Converts Bank Leumi PDF statements to CSV format
+- **PDF Parser** (`pdf2csv.py`): Primary PDF parser for Bank Leumi statements with advanced Hebrew RTL support
+- **Alternative PDF Parser** (`pdf2csv_v2.py`): Simplified PDF parser for Israeli bank statements
 - **XLS Parser** (`xls2csv.py`): Converts Bank Leumi XLS statements (HTML format) to CSV format
-- **Interactive Dashboard** (`pnl_dashboard.html`): Main web interface with CSV/PDF/XLS upload
-- **Static Dashboard** (`bank_leumi_analysis.html`): Reference dashboard with hardcoded data
+- **Interactive Dashboard** (`pnl_dashboard.html`): Main web interface with multi-file upload and retirement planning
+- **Debug Tool** (`test_csv_debug.html`): CSV testing and debugging utility
 
 ### Technology Stack
 - **Backend**: Flask with CORS support for file uploads
@@ -51,11 +52,14 @@ python server.py
 
 ### PDF Processing (Standalone)
 ```bash
-# Convert PDF to CSV directly
+# Convert PDF to CSV directly (primary parser)
 python pdf2csv.py input.pdf output.csv
 
 # With verbose debugging
 python pdf2csv.py input.pdf output.csv --verbose
+
+# Alternative parser for different PDF formats
+python pdf2csv_v2.py input.pdf output.csv
 ```
 
 ### XLS Processing (Standalone)
@@ -78,13 +82,22 @@ python xls2csv.py input.xls output.csv --verbose
 6. **Response**: JSON with CSV data and transaction count
 
 ### XLS Processing Pipeline
-1. **Upload**: XLS file uploaded via `/upload-pdf` endpoint
+1. **Upload**: XLS file uploaded via `/upload-pdf` or `/upload-multiple` endpoints
 2. **Validation**: File type and Bank Leumi format validation
 3. **HTML Extraction**: Read HTML content from XLS file
 4. **Table Parsing**: BeautifulSoup extracts Hebrew transaction table with columns (תאריך, תיאור, בחובה, בזכות, היתרה)
 5. **Amount Calculation**: Convert Debit/Credit columns to signed amounts
 6. **CSV Generation**: Proper CSV escaping with UTF-8 encoding and YYYY-MM-DD dates
 7. **Response**: JSON with CSV data and transaction count
+
+### Multi-Account Processing Pipeline
+1. **Upload**: Multiple files uploaded via `/upload-multiple` endpoint
+2. **Validation**: Each file validated independently
+3. **Processing**: Each file processed by appropriate parser (PDF/XLS/CSV)
+4. **Account Detection**: Account names extracted from filenames or content
+5. **Data Aggregation**: Individual account data preserved while enabling combined analysis
+6. **UI Generation**: Account selection interface populated with available accounts
+7. **Response**: JSON with account data structure and processing results
 
 ### CSV Processing Pipeline
 1. **Client Upload**: FileReader processes CSV with UTF-8 encoding
@@ -96,11 +109,27 @@ python xls2csv.py input.xls output.csv --verbose
 
 ## Key Features Implementation
 
+### Multi-Account Analysis
+- **File Upload**: Multiple file selection with drag-and-drop support
+- **Account Selection**: UI for choosing which accounts to analyze
+- **Data Aggregation**: Combined P&L analysis across multiple accounts
+- **Individual Processing**: Each account maintains separate data integrity
+
 ### Date Range Filtering
 - **Filter Controls**: Start/end month dropdowns with Hebrew locale
 - **Active Filtering**: `dateFilterActive` flag and `filteredData` array
 - **UI Integration**: Filter status display and reset functionality
 - **Data Processing**: Modified `processData()` function handles filtered datasets
+
+### Retirement Planning Module
+- **Age-Based Projections**: Retirement savings calculations based on current age (25-65)
+- **Israeli Employment Law**: Mandatory savings rates according to Israeli regulations
+- **Interactive Inputs**: Age, current savings, target monthly expenses selectors
+- **Growth Projections**: 5-year interval savings growth charts with compound interest
+- **Cash Flow Analysis**: Monthly savings recommendations and emergency fund guidance
+- **Benchmark Comparison**: Interactive chart showing user position relative to savings goals
+- **Mandatory Savings Tool**: Checkbox and dropdown for Israeli employment law compliance
+- **Analytical Calculations**: Uses annuity formulas for accurate retirement projections
 
 ### Smart Transaction Classification
 - **Bank Format V1**: DD/MM/YY dates with balance-based amount calculation
@@ -126,6 +155,8 @@ CSV formats:
 - **`processData()`**: Core data aggregation with date filtering support  
 - **`populateDateFilters()`**: Builds month selection dropdowns from data
 - **`applyDateFilter()`** / **`resetDateFilter()`**: Filter management
+- **`switchTab()`**: Tab switching between P&L and Retirement modules
+- **`calculateRetirementMetrics()`**: Retirement savings calculations with Israeli law compliance
 - **`BankLeumiPDFParser.parse_transactions()`**: PDF transaction extraction
 - **`BankLeumiXLSParser.parse_transactions()`**: XLS HTML table parsing and transaction extraction
 
@@ -152,13 +183,15 @@ let dateFilterActive = false; // Whether filtering is active
 
 ### Flask Routes
 - `GET /`: Serves main dashboard (`pnl_dashboard.html`)
-- `POST /upload-pdf`: Handles PDF/CSV/XLS file uploads
-- `GET /health`: Server health check endpoint
+- `POST /upload-pdf`: Handles single PDF/CSV/XLS file uploads, returns JSON with CSV data and transaction count
+- `POST /upload-multiple`: Handles multiple file uploads for multi-account analysis, returns account data structure
+- `GET /health`: Server health check endpoint, returns basic server status
 
 ### File Upload Handling
 - **Allowed formats**: PDF, CSV, XLS
 - **Size limit**: 16MB maximum
 - **Processing**: Temporary file storage with UUID naming
+- **Multi-account support**: Handles multiple files simultaneously
 - **Error handling**: Comprehensive validation and cleanup
 
 ## Dependencies
@@ -188,3 +221,14 @@ let dateFilterActive = false; // Whether filtering is active
 - Server debug output for PDF processing in `server.py`
 - CSV content validation with character code analysis
 - PDF text extraction debugging with verbose mode
+- Retirement calculation validation and accuracy logging
+- Debug utility available at `test_csv_debug.html` for CSV testing
+
+### Testing and Validation
+- Use `test_csv_debug.html` for CSV format testing and validation
+- Server health check available at `/health` endpoint
+- Verbose mode available for all parsers with `--verbose` flag
+- Console logging provides detailed processing information for debugging
+- Multi-account processing includes individual file validation and error reporting
+
+
