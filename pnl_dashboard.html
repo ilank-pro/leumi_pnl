@@ -970,6 +970,42 @@
                 
                 <div class="grid">
                     <div class="card full-width">
+                        <h3>⏰ שנים עד פרישה לפי אחוז החיסכון</h3>
+                        <div class="chart-container">
+                            <canvas id="savingsRateChart"></canvas>
+                        </div>
+                        <div id="savingsRateMetrics" style="text-align: center; margin-top: 15px; padding: 10px; background: #f8f9fa; border-radius: 5px;">
+                            <!-- Savings rate metrics will be populated here -->
+                        </div>
+                    </div>
+                    
+                    <div class="card full-width">
+                        <h3>💰 התפתחות הנכסים והחסכונות עד הפרישה</h3>
+                        <div class="table-container">
+                            <table id="networthProjectionTable">
+                                <thead>
+                                    <tr>
+                                        <th>שנה</th>
+                                        <th>הכנסה</th>
+                                        <th>הוצאות</th>
+                                        <th>תשואה על השקעות (5%)</th>
+                                        <th>% הוצאות המכוסות על ידי תשואה</th>
+                                        <th>שינוי בנכסים (חסכונות + תשואה)</th>
+                                        <th>סה"כ נכסים</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="networthProjectionTableBody">
+                                    <!-- Networth projection rows will be populated here -->
+                                </tbody>
+                            </table>
+                        </div>
+                        <div style="margin-top: 15px; padding: 10px; background: #f0f8ff; border-radius: 5px; text-align: center; font-size: 14px;">
+                            <strong>הערה:</strong> כאשר התשואה השנתית על השקעות מכסה 100% מההוצאות, אתה עצמאי כלכלית.
+                            <br>הטבלה מציגה את הדרך לעצמאות כלכלית, אם תוצאות הפרישה מציגות תקופה ארוכה יותר.
+                        </div>
+                    </div>
+                    
+                    <div class="card full-width">
                         <h3>📈 צמיחת החסכונות על פני השנים</h3>
                         <div class="chart-container">
                             <canvas id="savingsGrowthChart"></canvas>
@@ -2909,9 +2945,10 @@
                 return;
             }
             
-            // Preserve checkbox state before regenerating HTML
+            // Preserve checkbox state before regenerating HTML, or default to checked if avg income > 0
             const existingCheckbox = document.getElementById('includeMandatorySavings');
-            const isCheckboxChecked = existingCheckbox ? existingCheckbox.checked : false;
+            const avgMonthlyIncome = calculateAverageMonthlyIncome();
+            const isCheckboxChecked = existingCheckbox ? existingCheckbox.checked : (avgMonthlyIncome > 0);
             const existingDropdownValue = document.getElementById('mandatorySavingsAmount')?.value || '';
             
             // Analyze salary vs other income
@@ -3333,6 +3370,10 @@
             // Update recommendations
             updateSavingsRecommendations(data);
             
+            // Create new retirement analysis charts and tables
+            createSavingsRateChart(data);
+            createNetworthProjectionTable(data);
+            
             // Create savings growth chart
             createSavingsGrowthChart(data);
         }
@@ -3628,6 +3669,179 @@
                     }
                 }
             });
+        }
+        
+        function createSavingsRateChart(data) {
+            const ctx = document.getElementById('savingsRateChart').getContext('2d');
+            const age = parseInt(document.getElementById('currentAge').value);
+            const currentSavings = parseInt(document.getElementById('currentSavings').value);
+            const annualReturn = parseFloat(document.getElementById('annualReturn').value);
+            const targetMonthlyExpense = data.targetMonthlyExpense;
+            const monthlyIncome = data.monthlyIncome;
+            const retirementTarget = data.retirementTarget;
+            
+            // Destroy existing chart if it exists
+            if (charts.savingsRateChart) {
+                charts.savingsRateChart.destroy();
+            }
+            
+            // Calculate years to retirement for different savings rates
+            const savingsRates = [];
+            const yearsToRetirement = [];
+            const currentSavingsRate = ((data.totalMonthlySaving || 0) / monthlyIncome) * 100;
+            
+            for (let rate = 0; rate <= 100; rate += 5) {
+                const monthlySavings = (rate / 100) * monthlyIncome;
+                const years = calculateYearsToRetirementWithSavings(currentSavings, retirementTarget, annualReturn, monthlySavings);
+                
+                savingsRates.push(rate);
+                yearsToRetirement.push(Math.min(years, 50)); // Cap at 50 years for display
+            }
+            
+            // Find current position
+            const currentIndex = savingsRates.findIndex(rate => rate >= currentSavingsRate);
+            
+            // Create background colors array with highlighted current position
+            const backgroundColors = savingsRates.map((rate, index) => {
+                if (Math.abs(rate - currentSavingsRate) < 2.5) {
+                    return '#28a745'; // Green for current position
+                } else if (yearsToRetirement[index] <= 65 - age) {
+                    return '#6c757d'; // Gray for achievable retirement
+                } else {
+                    return '#dc3545'; // Red for unrealistic retirement
+                }
+            });
+            
+            charts.savingsRateChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: savingsRates.map(rate => rate + '%'),
+                    datasets: [{
+                        label: 'שנים עד פרישה',
+                        data: yearsToRetirement,
+                        backgroundColor: backgroundColors,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: 'אחוז החיסכון החודשי לעומת שנים עד פרישה',
+                            font: {
+                                size: 16
+                            }
+                        },
+                        legend: {
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            title: {
+                                display: true,
+                                text: 'שנים עד פרישה'
+                            },
+                            beginAtZero: true,
+                            max: 50
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'אחוז החיסכון מההכנסה'
+                            }
+                        }
+                    }
+                }
+            });
+            
+            // Update metrics display
+            const metricsDiv = document.getElementById('savingsRateMetrics');
+            const currentYears = calculateYearsToRetirementWithSavings(currentSavings, retirementTarget, annualReturn, data.totalMonthlySaving || 0);
+            const retirementAge = age + currentYears;
+            
+            metricsDiv.innerHTML = `
+                <div style="display: flex; justify-content: space-around; flex-wrap: wrap;">
+                    <div style="margin: 5px;">
+                        <strong>אחוז החיסכון הנוכחי:</strong> ${currentSavingsRate.toFixed(1)}%
+                    </div>
+                    <div style="margin: 5px;">
+                        <strong>שנים עד פרישה:</strong> ${currentYears.toFixed(1)} שנים
+                    </div>
+                    <div style="margin: 5px;">
+                        <strong>גיל פרישה צפוי:</strong> ${retirementAge.toFixed(0)}
+                    </div>
+                    <div style="margin: 5px;">
+                        <strong>חסכון חודשי נדרש:</strong> ₪${(data.totalMonthlySaving || 0).toLocaleString('he-IL')}
+                    </div>
+                </div>
+            `;
+        }
+        
+        function createNetworthProjectionTable(data) {
+            const tableBody = document.getElementById('networthProjectionTableBody');
+            const age = parseInt(document.getElementById('currentAge').value);
+            const currentSavings = parseInt(document.getElementById('currentSavings').value);
+            const annualReturn = parseFloat(document.getElementById('annualReturn').value);
+            const monthlyIncome = data.monthlyIncome;
+            const monthlyExpenses = data.targetMonthlyExpense;
+            const annualIncome = monthlyIncome * 12;
+            const annualExpenses = monthlyExpenses * 12;
+            const annualSavings = annualIncome - annualExpenses;
+            
+            // Clear existing table
+            tableBody.innerHTML = '';
+            
+            let currentNetworth = currentSavings;
+            
+            // Add initial row (Year 0)
+            const initialRow = document.createElement('tr');
+            initialRow.innerHTML = `
+                <td style="text-align: center; font-weight: bold;">0</td>
+                <td style="text-align: center;">-</td>
+                <td style="text-align: center;">-</td>
+                <td style="text-align: center;">-</td>
+                <td style="text-align: center;">-</td>
+                <td style="text-align: center;">-</td>
+                <td style="text-align: center; font-weight: bold;">₪${currentNetworth.toLocaleString('he-IL')}</td>
+            `;
+            tableBody.appendChild(initialRow);
+            
+            // Project future years until 100% ROI coverage
+            for (let year = 1; year <= 50; year++) { // Safety limit of 50 years
+                const roi = currentNetworth * annualReturn;
+                const expensesCoveredByRoi = Math.min(100, (roi / annualExpenses) * 100);
+                const networthChange = annualSavings + roi;
+                currentNetworth += networthChange;
+                
+                const row = document.createElement('tr');
+                
+                // Highlight when ROI covers expenses
+                const rowStyle = expensesCoveredByRoi >= 100 ? 'background-color: #d4edda;' : '';
+                
+                row.innerHTML = `
+                    <td style="text-align: center; font-weight: bold; ${rowStyle}">${year}</td>
+                    <td style="text-align: center; ${rowStyle}">₪${Math.round(annualIncome).toLocaleString('he-IL')}</td>
+                    <td style="text-align: center; ${rowStyle}">₪${Math.round(annualExpenses).toLocaleString('he-IL')}</td>
+                    <td style="text-align: center; ${rowStyle}">₪${Math.round(roi).toLocaleString('he-IL')}</td>
+                    <td style="text-align: center; font-weight: bold; ${rowStyle}">${Math.round(expensesCoveredByRoi)}%</td>
+                    <td style="text-align: center; ${rowStyle}">₪${Math.round(networthChange).toLocaleString('he-IL')}</td>
+                    <td style="text-align: center; font-weight: bold; ${rowStyle}">₪${Math.round(currentNetworth).toLocaleString('he-IL')}</td>
+                `;
+                
+                tableBody.appendChild(row);
+                
+                // Stop when we've reached 100% financial independence
+                if (expensesCoveredByRoi >= 100) {
+                    break;
+                }
+            }
+            
+            // Update the ROI percentage in the header
+            const roiHeader = document.querySelector('#networthProjectionTable th:nth-child(4)');
+            roiHeader.textContent = `תשואה על השקעות (${(annualReturn * 100).toFixed(0)}%)`;
         }
         
     </script>

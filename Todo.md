@@ -1,4 +1,3 @@
-Update Todos
   ⎿  ☒ Fix account csv_data undefined error and add defensive programming            
      ☒ Debug why account selection section is not visible after multi-file upload
      ☒ Remove hiding logic to keep account selection UI visible after proceeding
@@ -25,3 +24,4 @@ Update Todos
      ☒ Add cash flow recommendations and emergency fund guidance
      ☒ Add Israeli employment law savings analysis with salary income breakdown
      ☒ Add validation and logging for calculation accuracy
+     ☐ Add ⏰ שנים עד פרישה לפי אחוז החיסכון
