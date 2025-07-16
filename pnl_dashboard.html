@@ -702,6 +702,49 @@
                 width: 100%;
             }
         }
+        
+        /* Collapsible Retirement Recommendations Styles */
+        .collapsible-header {
+            cursor: pointer;
+            padding: 15px;
+            background: #d4edda;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            transition: background-color 0.3s ease;
+            font-weight: 600;
+            color: #155724;
+        }
+        
+        .collapsible-header:hover {
+            background: #c3e6cb;
+        }
+        
+        .collapsible-content {
+            max-height: 2000px;
+            opacity: 1;
+            overflow: hidden;
+            transition: max-height 0.4s ease, opacity 0.3s ease, padding 0.3s ease;
+            padding: 0 15px 15px 15px;
+        }
+        
+        .collapsible-content.collapsed {
+            max-height: 0;
+            opacity: 0;
+            padding: 0 15px 0 15px;
+        }
+        
+        .collapse-icon {
+            transition: transform 0.3s ease;
+            font-size: 18px;
+            color: #155724;
+        }
+        
+        .collapse-icon.rotated {
+            transform: rotate(180deg);
+        }
     </style>
 </head>
 <body>
@@ -960,8 +1003,14 @@
                     </div>
                 </div>
                 
-                <div class="retirement-recommendations" id="retirementRecommendations" style="background: #e8f5e8; border-radius: 10px; padding: 15px; margin-bottom: 20px; display: none;">
-                    <!-- Cash flow and emergency fund recommendations will be populated here -->
+                <div class="retirement-recommendations" id="retirementRecommendations" style="background: #e8f5e8; border-radius: 10px; margin-bottom: 20px; display: none;">
+                    <div class="collapsible-header" onclick="toggleRecommendations()">
+                        <h4 style="margin: 0; color: #155724;">💡 המלצות תזרים מזומנים</h4>
+                        <span class="collapse-icon" id="collapseIcon">▼</span>
+                    </div>
+                    <div class="collapsible-content" id="recommendationsContent">
+                        <!-- Cash flow and emergency fund recommendations will be populated here -->
+                    </div>
                 </div>
                 
                 <div class="retirement-results" id="retirementResults">
@@ -3088,7 +3137,8 @@
                 `;
             }
             
-            recommendationsDiv.innerHTML = content;
+            const contentDiv = document.getElementById('recommendationsContent');
+            contentDiv.innerHTML = content;
             recommendationsDiv.style.display = 'block';
             
             // Populate mandatory savings dropdown if salary data exists
@@ -3344,11 +3394,11 @@
                     </div>
                 </div>
                 <div class="result-card">
-                    <div class="result-label">חיסכון חודשי נוסף</div>
-                    <div class="result-value">₪${data.additionalMonthlySaving.toLocaleString()}</div>
-                    ${data.additionalMonthlySaving > 0 ? 
-                        `<div class="result-label" style="font-size: 12px; color: #2e7d32;">מקדם את הפרישה</div>` : 
-                        `<div class="result-label" style="font-size: 12px; color: #666;">ללא חיסכון נוסף</div>`}
+                    <div class="result-label">סך חיסכון חודשי נדרש</div>
+                    <div class="result-value">₪${data.totalMonthlySaving.toLocaleString()}</div>
+                    ${data.totalMonthlySaving > 0 ? 
+                        `<div class="result-label" style="font-size: 12px; color: #2e7d32;">כולל חיסכון נוסף וחובה</div>` : 
+                        `<div class="result-label" style="font-size: 12px; color: #666;">ללא חיסכון</div>`}
                 </div>
                 <div class="result-card">
                     <div class="result-label">גיל פרישה צפוי</div>
@@ -3688,6 +3738,7 @@
             // Calculate years to retirement for different savings rates
             const savingsRates = [];
             const yearsToRetirement = [];
+            const monthlySavingsAmounts = [];
             const currentSavingsRate = ((data.totalMonthlySaving || 0) / monthlyIncome) * 100;
             
             for (let rate = 0; rate <= 100; rate += 5) {
@@ -3696,6 +3747,7 @@
                 
                 savingsRates.push(rate);
                 yearsToRetirement.push(Math.min(years, 50)); // Cap at 50 years for display
+                monthlySavingsAmounts.push(monthlySavings);
             }
             
             // Find current position
@@ -3720,7 +3772,22 @@
                         label: 'שנים עד פרישה',
                         data: yearsToRetirement,
                         backgroundColor: backgroundColors,
-                        borderRadius: 4
+                        borderRadius: 4,
+                        yAxisID: 'y',
+                        order: 1
+                    }, {
+                        label: 'סכום חיסכון חודשי נדרש (₪)',
+                        data: monthlySavingsAmounts,
+                        type: 'line',
+                        borderColor: '#007bff',
+                        backgroundColor: 'rgba(0, 123, 255, 0.1)',
+                        borderWidth: 3,
+                        fill: false,
+                        tension: 0.1,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        yAxisID: 'y1',
+                        order: 0
                     }]
                 },
                 options: {
@@ -3735,17 +3802,53 @@
                             }
                         },
                         legend: {
-                            display: false
+                            display: true,
+                            position: 'top'
+                        },
+                        tooltip: {
+                            callbacks: {
+                                title: function(context) {
+                                    return 'אחוז חיסכון: ' + context[0].label;
+                                },
+                                label: function(context) {
+                                    if (context.datasetIndex === 0) {
+                                        return 'שנים עד פרישה: ' + context.parsed.y.toFixed(1);
+                                    } else {
+                                        return 'סכום חיסכון חודשי: ₪' + context.parsed.y.toLocaleString('he-IL');
+                                    }
+                                }
+                            }
                         }
                     },
                     scales: {
                         y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
                             title: {
                                 display: true,
                                 text: 'שנים עד פרישה'
                             },
                             beginAtZero: true,
                             max: 50
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'סכום חיסכון חודשי נדרש (₪)'
+                            },
+                            beginAtZero: true,
+                            ticks: {
+                                callback: function(value) {
+                                    return '₪' + value.toLocaleString('he-IL');
+                                }
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            }
                         },
                         x: {
                             title: {
@@ -3842,6 +3945,24 @@
             // Update the ROI percentage in the header
             const roiHeader = document.querySelector('#networthProjectionTable th:nth-child(4)');
             roiHeader.textContent = `תשואה על השקעות (${(annualReturn * 100).toFixed(0)}%)`;
+        }
+        
+        // Collapsible Retirement Recommendations Functions
+        function toggleRecommendations() {
+            const content = document.getElementById('recommendationsContent');
+            const icon = document.getElementById('collapseIcon');
+            
+            if (content.classList.contains('collapsed')) {
+                // Expand
+                content.classList.remove('collapsed');
+                icon.classList.remove('rotated');
+                icon.textContent = '▼';
+            } else {
+                // Collapse
+                content.classList.add('collapsed');
+                icon.classList.add('rotated');
+                icon.textContent = '▲';
+            }
         }
         
     </script>
