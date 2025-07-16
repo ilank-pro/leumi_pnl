@@ -745,6 +745,91 @@
         .collapse-icon.rotated {
             transform: rotate(180deg);
         }
+        
+        /* Interactive Retirement Sliders Styles */
+        .retirement-sliders {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 1px solid #e0e0e0;
+        }
+        
+        .slider-group {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-top: 15px;
+        }
+        
+        .slider-container {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            padding: 15px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .slider-label {
+            font-weight: 600;
+            color: #333;
+            font-size: 14px;
+            text-align: center;
+        }
+        
+        .slider-input {
+            width: 100%;
+            height: 8px;
+            border-radius: 4px;
+            background: #ddd;
+            outline: none;
+            -webkit-appearance: none;
+            cursor: pointer;
+        }
+        
+        .slider-input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #0052cc;
+            cursor: pointer;
+        }
+        
+        .slider-input::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #0052cc;
+            cursor: pointer;
+            border: none;
+        }
+        
+        .slider-value {
+            text-align: center;
+            font-size: 16px;
+            font-weight: 600;
+            color: #0052cc;
+            background: #e3f2fd;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        
+        .slider-impact {
+            text-align: center;
+            font-size: 12px;
+            color: #666;
+            margin-top: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .slider-group {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1000,6 +1085,42 @@
                             <option value="0.09">9%</option>
                             <option value="0.10">10%</option>
                         </select>
+                    </div>
+                </div>
+                
+                <div class="retirement-sliders" id="retirementSliders" style="display: none;">
+                    <h3 style="margin: 0 0 10px 0; text-align: center; color: #0052cc;">🎛️ מסלולי סימולציה אינטראקטיביים</h3>
+                    <p style="text-align: center; color: #666; margin-bottom: 20px; font-size: 14px;">
+                        הזז את המחוונים כדי לראות איך משתנים הערכים וההשפעות על התכנון שלך
+                    </p>
+                    
+                    <div class="slider-group">
+                        <div class="slider-container">
+                            <div class="slider-label">הוצאות מתוכננות לפרישה</div>
+                            <input type="range" class="slider-input" id="expenseSlider" 
+                                   min="5000" max="50000" step="1000" value="15000"
+                                   oninput="onExpenseSliderChange(this.value)">
+                            <div class="slider-value" id="expenseValue">₪15,000</div>
+                            <div class="slider-impact" id="expenseImpact">משפיע על יעד החיסכון הנדרש</div>
+                        </div>
+                        
+                        <div class="slider-container">
+                            <div class="slider-label">סך חיסכון חודשי נדרש</div>
+                            <input type="range" class="slider-input" id="savingsSlider" 
+                                   min="0" max="40000" step="500" value="5000"
+                                   oninput="onSavingsSliderChange(this.value)">
+                            <div class="slider-value" id="savingsValue">₪5,000</div>
+                            <div class="slider-impact" id="savingsImpact">משפיע על גיל הפרישה</div>
+                        </div>
+                        
+                        <div class="slider-container">
+                            <div class="slider-label">גיל פרישה צפוי</div>
+                            <input type="range" class="slider-input" id="ageSlider" 
+                                   min="30" max="80" step="1" value="65"
+                                   oninput="onAgeSliderChange(this.value)">
+                            <div class="slider-value" id="ageValue">65</div>
+                            <div class="slider-impact" id="ageImpact">משפיע על החיסכון הנדרש</div>
+                        </div>
                     </div>
                 </div>
                 
@@ -3426,6 +3547,9 @@
             
             // Create savings growth chart
             createSavingsGrowthChart(data);
+            
+            // Update interactive sliders
+            updateSlidersFromCalculation();
         }
         
         function createBenchmarkChart(data) {
@@ -3963,6 +4087,219 @@
                 icon.classList.add('rotated');
                 icon.textContent = '▲';
             }
+        }
+        
+        // Interactive Slider Functions
+        let isSliderMode = false; // Track if we're in slider mode
+        
+        function onExpenseSliderChange(value) {
+            isSliderMode = true;
+            const expenseValue = parseInt(value);
+            document.getElementById('expenseValue').textContent = '₪' + expenseValue.toLocaleString('he-IL');
+            
+            // Ensure dropdown option exists and update dropdown
+            ensureDropdownOption('targetMonthlyExpense', expenseValue);
+            
+            // Calculate impacts on other sliders
+            const currentAge = parseInt(document.getElementById('currentAge').value);
+            const currentSavings = parseInt(document.getElementById('currentSavings').value) || 0;
+            const annualReturn = parseFloat(document.getElementById('annualReturn').value) || 0.04;
+            const retirementTarget = expenseValue * 12 * 25;
+            
+            // Keep current savings amount and calculate new retirement age
+            const currentSavingsAmount = parseInt(document.getElementById('additionalMonthlySaving').value) || 0;
+            if (currentSavingsAmount > 0) {
+                const yearsToRetirement = calculateYearsToRetirementWithSavings(currentSavings, retirementTarget, annualReturn, currentSavingsAmount);
+                const retirementAge = currentAge + yearsToRetirement;
+                
+                // Update age slider
+                document.getElementById('ageSlider').value = Math.min(80, Math.max(30, Math.round(retirementAge)));
+                document.getElementById('ageValue').textContent = Math.round(retirementAge);
+            } else {
+                // If no savings, calculate required savings for current retirement age
+                const targetRetirementAge = parseInt(document.getElementById('ageSlider').value);
+                const yearsToRetirement = targetRetirementAge - currentAge;
+                
+                if (yearsToRetirement > 0) {
+                    const requiredSavings = calculateRequiredMonthlySavings(currentSavings, retirementTarget, annualReturn, yearsToRetirement);
+                    
+                    // Update savings slider
+                    document.getElementById('savingsSlider').value = requiredSavings;
+                    document.getElementById('savingsValue').textContent = '₪' + requiredSavings.toLocaleString('he-IL');
+                    ensureDropdownOption('additionalMonthlySaving', requiredSavings);
+                }
+            }
+            
+            // Update all impact messages
+            updateAllSliderImpacts();
+            
+            // Recalculate with new expense value
+            calculateRetirementMetrics();
+            
+            isSliderMode = false;
+        }
+        
+        function onSavingsSliderChange(value) {
+            isSliderMode = true;
+            const savingsValue = parseInt(value);
+            document.getElementById('savingsValue').textContent = '₪' + savingsValue.toLocaleString('he-IL');
+            
+            // Ensure dropdown option exists and update dropdown
+            ensureDropdownOption('additionalMonthlySaving', savingsValue);
+            
+            // Calculate and update age slider
+            const currentAge = parseInt(document.getElementById('currentAge').value);
+            const currentSavings = parseInt(document.getElementById('currentSavings').value) || 0;
+            const annualReturn = parseFloat(document.getElementById('annualReturn').value) || 0.04;
+            const targetExpense = parseInt(document.getElementById('targetMonthlyExpense').value) || 15000;
+            const retirementTarget = targetExpense * 12 * 25;
+            
+            if (currentAge && savingsValue >= 0) {
+                const yearsToRetirement = calculateYearsToRetirementWithSavings(currentSavings, retirementTarget, annualReturn, savingsValue);
+                const retirementAge = currentAge + yearsToRetirement;
+                
+                // Update age slider
+                document.getElementById('ageSlider').value = Math.min(80, Math.max(30, Math.round(retirementAge)));
+                document.getElementById('ageValue').textContent = Math.round(retirementAge);
+            }
+            
+            // Update all impact messages
+            updateAllSliderImpacts();
+            
+            // Recalculate with new savings value
+            calculateRetirementMetrics();
+            
+            isSliderMode = false;
+        }
+        
+        function onAgeSliderChange(value) {
+            isSliderMode = true;
+            const targetAge = parseInt(value);
+            document.getElementById('ageValue').textContent = targetAge;
+            
+            // Calculate required savings for target age
+            const currentAge = parseInt(document.getElementById('currentAge').value);
+            const currentSavings = parseInt(document.getElementById('currentSavings').value) || 0;
+            const annualReturn = parseFloat(document.getElementById('annualReturn').value) || 0.04;
+            const targetExpense = parseInt(document.getElementById('targetMonthlyExpense').value) || 15000;
+            const retirementTarget = targetExpense * 12 * 25;
+            const yearsToRetirement = targetAge - currentAge;
+            
+            if (currentAge && yearsToRetirement > 0) {
+                // Calculate required monthly savings for target retirement age
+                const requiredSavings = calculateRequiredMonthlySavings(currentSavings, retirementTarget, annualReturn, yearsToRetirement);
+                
+                // Update savings slider and dropdown
+                document.getElementById('savingsSlider').value = requiredSavings;
+                document.getElementById('savingsValue').textContent = '₪' + requiredSavings.toLocaleString('he-IL');
+                ensureDropdownOption('additionalMonthlySaving', requiredSavings);
+                
+                // Update all impact messages
+                updateAllSliderImpacts();
+                
+                // Recalculate to update all displays
+                calculateRetirementMetrics();
+            } else {
+                document.getElementById('ageImpact').textContent = 'משפיע על החיסכון הנדרש';
+            }
+            
+            isSliderMode = false;
+        }
+        
+        function calculateRequiredMonthlySavings(currentSavings, targetAmount, annualReturn, yearsToRetirement) {
+            if (yearsToRetirement <= 0) return 0;
+            if (currentSavings >= targetAmount) return 0;
+            
+            const monthlyRate = annualReturn / 12;
+            const months = yearsToRetirement * 12;
+            
+            if (monthlyRate === 0) {
+                // No interest case
+                return (targetAmount - currentSavings) / months;
+            }
+            
+            // Future value of current savings
+            const futureValueOfCurrentSavings = currentSavings * Math.pow(1 + monthlyRate, months);
+            const remainingAmount = targetAmount - futureValueOfCurrentSavings;
+            
+            if (remainingAmount <= 0) return 0;
+            
+            // Calculate required monthly payment using annuity formula
+            const requiredMonthlyPayment = remainingAmount / (((Math.pow(1 + monthlyRate, months) - 1) / monthlyRate));
+            
+            return Math.max(0, Math.round(requiredMonthlyPayment));
+        }
+        
+        function updateSlidersFromCalculation() {
+            if (isSliderMode) return; // Don't update sliders if we're in slider mode
+            
+            // Update sliders with current calculation values
+            const targetExpense = parseInt(document.getElementById('targetMonthlyExpense').value) || 15000;
+            const additionalSavings = parseInt(document.getElementById('additionalMonthlySaving').value) || 0;
+            const currentAge = parseInt(document.getElementById('currentAge').value) || 35;
+            
+            // Calculate retirement age from current values
+            const currentSavings = parseInt(document.getElementById('currentSavings').value) || 0;
+            const annualReturn = parseFloat(document.getElementById('annualReturn').value) || 0.04;
+            const retirementTarget = targetExpense * 12 * 25;
+            const yearsToRetirement = calculateYearsToRetirementWithSavings(currentSavings, retirementTarget, annualReturn, additionalSavings);
+            const retirementAge = currentAge + yearsToRetirement;
+            
+            // Update sliders
+            document.getElementById('expenseSlider').value = targetExpense;
+            document.getElementById('expenseValue').textContent = '₪' + targetExpense.toLocaleString('he-IL');
+            
+            document.getElementById('savingsSlider').value = additionalSavings;
+            document.getElementById('savingsValue').textContent = '₪' + additionalSavings.toLocaleString('he-IL');
+            
+            document.getElementById('ageSlider').value = Math.min(80, Math.max(30, Math.round(retirementAge)));
+            document.getElementById('ageValue').textContent = Math.round(retirementAge);
+            
+            // Update impact messages
+            updateAllSliderImpacts();
+            
+            // Show sliders section
+            document.getElementById('retirementSliders').style.display = 'block';
+        }
+        
+        function updateAllSliderImpacts() {
+            // Calculate all values
+            const currentAge = parseInt(document.getElementById('currentAge').value);
+            const currentSavings = parseInt(document.getElementById('currentSavings').value) || 0;
+            const annualReturn = parseFloat(document.getElementById('annualReturn').value) || 0.04;
+            const targetExpense = parseInt(document.getElementById('targetMonthlyExpense').value) || 15000;
+            const savingsAmount = parseInt(document.getElementById('additionalMonthlySaving').value) || 0;
+            const retirementAge = parseInt(document.getElementById('ageSlider').value);
+            const yearsToRetirement = retirementAge - currentAge;
+            
+            // Update impact messages
+            document.getElementById('expenseImpact').textContent = 
+                'יעד חיסכון: ₪' + (targetExpense * 12 * 25).toLocaleString('he-IL');
+            document.getElementById('savingsImpact').textContent = 
+                'גיל פרישה: ' + retirementAge + ' (בעוד ' + yearsToRetirement + ' שנים)';
+            document.getElementById('ageImpact').textContent = 
+                'חיסכון נדרש: ₪' + savingsAmount.toLocaleString('he-IL') + ' לחודש';
+        }
+        
+        function ensureDropdownOption(selectId, value) {
+            const select = document.getElementById(selectId);
+            let optionExists = false;
+            
+            for (let option of select.options) {
+                if (parseInt(option.value) === value) {
+                    optionExists = true;
+                    break;
+                }
+            }
+            
+            if (!optionExists && value > 0) {
+                const option = document.createElement('option');
+                option.value = value;
+                option.textContent = '₪' + value.toLocaleString('he-IL');
+                select.appendChild(option);
+            }
+            
+            select.value = value;
         }
         
     </script>
