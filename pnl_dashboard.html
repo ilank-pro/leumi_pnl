@@ -4035,7 +4035,8 @@
             // Project future years until 100% ROI coverage
             for (let year = 1; year <= 50; year++) { // Safety limit of 50 years
                 const roi = currentNetworth * annualReturn;
-                const expensesCoveredByRoi = Math.min(100, (roi / annualExpenses) * 100);
+                const roiFor4Percent = currentNetworth * 0.04; // Fixed 4% for expense coverage calculation
+                const expensesCoveredByRoi = Math.min(100, (roiFor4Percent / annualExpenses) * 100);
                 const networthChange = annualDeposits + roi;
                 currentNetworth += networthChange;
                 
