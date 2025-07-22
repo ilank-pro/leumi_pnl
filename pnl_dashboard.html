@@ -1156,11 +1156,10 @@
                                 <thead>
                                     <tr>
                                         <th>שנה</th>
-                                        <th>הכנסה</th>
-                                        <th>הוצאות</th>
+                                        <th>הפקדה שנתית</th>
                                         <th>תשואה על השקעות (5%)</th>
                                         <th>% הוצאות המכוסות על ידי תשואה</th>
-                                        <th>שינוי בנכסים (חסכונות + תשואה)</th>
+                                        <th>שינוי בנכסים (הפקדה + תשואה)</th>
                                         <th>סה"כ נכסים</th>
                                     </tr>
                                 </thead>
@@ -4012,11 +4011,9 @@
             const age = parseInt(document.getElementById('currentAge').value);
             const currentSavings = parseInt(document.getElementById('currentSavings').value);
             const annualReturn = parseFloat(document.getElementById('annualReturn').value);
-            const monthlyIncome = data.monthlyIncome;
             const monthlyExpenses = data.targetMonthlyExpense;
-            const annualIncome = monthlyIncome * 12;
             const annualExpenses = monthlyExpenses * 12;
-            const annualSavings = annualIncome - annualExpenses;
+            const annualDeposits = (data.totalMonthlySaving || 0) * 12;
             
             // Clear existing table
             tableBody.innerHTML = '';
@@ -4031,7 +4028,6 @@
                 <td style="text-align: center;">-</td>
                 <td style="text-align: center;">-</td>
                 <td style="text-align: center;">-</td>
-                <td style="text-align: center;">-</td>
                 <td style="text-align: center; font-weight: bold;">₪${currentNetworth.toLocaleString('he-IL')}</td>
             `;
             tableBody.appendChild(initialRow);
@@ -4040,7 +4036,7 @@
             for (let year = 1; year <= 50; year++) { // Safety limit of 50 years
                 const roi = currentNetworth * annualReturn;
                 const expensesCoveredByRoi = Math.min(100, (roi / annualExpenses) * 100);
-                const networthChange = annualSavings + roi;
+                const networthChange = annualDeposits + roi;
                 currentNetworth += networthChange;
                 
                 const row = document.createElement('tr');
@@ -4050,8 +4046,7 @@
                 
                 row.innerHTML = `
                     <td style="text-align: center; font-weight: bold; ${rowStyle}">${year}</td>
-                    <td style="text-align: center; ${rowStyle}">₪${Math.round(annualIncome).toLocaleString('he-IL')}</td>
-                    <td style="text-align: center; ${rowStyle}">₪${Math.round(annualExpenses).toLocaleString('he-IL')}</td>
+                    <td style="text-align: center; ${rowStyle}">₪${Math.round(annualDeposits).toLocaleString('he-IL')}</td>
                     <td style="text-align: center; ${rowStyle}">₪${Math.round(roi).toLocaleString('he-IL')}</td>
                     <td style="text-align: center; font-weight: bold; ${rowStyle}">${Math.round(expensesCoveredByRoi)}%</td>
                     <td style="text-align: center; ${rowStyle}">₪${Math.round(networthChange).toLocaleString('he-IL')}</td>
@@ -4067,7 +4062,7 @@
             }
             
             // Update the ROI percentage in the header
-            const roiHeader = document.querySelector('#networthProjectionTable th:nth-child(4)');
+            const roiHeader = document.querySelector('#networthProjectionTable th:nth-child(3)');
             roiHeader.textContent = `תשואה על השקעות (${(annualReturn * 100).toFixed(0)}%)`;
         }
         
